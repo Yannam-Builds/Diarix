@@ -5,6 +5,21 @@ from pathlib import Path
 from backend.backends import base
 
 
+def test_native_windows_path_strips_extended_drive_prefix(monkeypatch):
+    monkeypatch.setattr(base.platform, "system", lambda: "Windows")
+
+    assert base.native_windows_path(r"\\?\Z:\models\snapshot") == r"Z:\models\snapshot"
+
+
+def test_native_windows_path_strips_extended_unc_prefix(monkeypatch):
+    monkeypatch.setattr(base.platform, "system", lambda: "Windows")
+
+    assert (
+        base.native_windows_path(r"\\?\UNC\server\share\models")
+        == r"\\server\share\models"
+    )
+
+
 def test_materialize_windows_snapshot_links_replaces_symlink(
     tmp_path: Path, monkeypatch
 ):

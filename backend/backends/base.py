@@ -23,6 +23,18 @@ from ..utils.tasks import get_task_manager
 logger = logging.getLogger(__name__)
 
 
+def native_windows_path(path: str | Path) -> str:
+    """Return a native path string accepted by Windows ML runtimes."""
+    value = str(path)
+    if platform.system() != "Windows":
+        return value
+    if value.startswith("\\\\?\\UNC\\"):
+        return "\\\\" + value[8:]
+    if value.startswith("\\\\?\\"):
+        return value[4:]
+    return value
+
+
 def materialize_windows_snapshot_links(snapshot_dir: str | Path) -> Path:
     """Replace Hugging Face snapshot symlinks with hardlinks on Windows.
 
@@ -31,7 +43,7 @@ def materialize_windows_snapshot_links(snapshot_dir: str | Path) -> Path:
     ``\\\\?\\`` path. Hardlinks retain Hugging Face's deduplicated blob storage
     without copying model weights, and ordinary files are left untouched.
     """
-    snapshot = Path(snapshot_dir)
+    snapshot = Path(native_windows_path(snapshot_dir))
     if platform.system() != "Windows":
         return snapshot
 
