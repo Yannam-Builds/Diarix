@@ -86,6 +86,43 @@ def _get_dir_size(path: Path) -> int:
     return total
 
 
+def _get_cache_usage(cache_dir: Path) -> dict[str, int]:
+    """Measure durable model data separately from disposable download state."""
+    model_bytes = 0
+    temporary_bytes = 0
+    incomplete_files = 0
+
+    if not cache_dir.exists():
+        return {
+            "total_bytes": 0,
+            "model_bytes": 0,
+            "temporary_bytes": 0,
+            "incomplete_files": 0,
+        }
+
+    for item in cache_dir.rglob("*"):
+        if not item.is_file():
+            continue
+        try:
+            size = item.stat().st_size
+        except OSError:
+            continue
+        is_temporary = item.name.endswith(".incomplete") or ".locks" in item.parts
+        if item.name.endswith(".incomplete"):
+            incomplete_files += 1
+        if is_temporary:
+            temporary_bytes += size
+        else:
+            model_bytes += size
+
+    return {
+        "total_bytes": model_bytes + temporary_bytes,
+        "model_bytes": model_bytes,
+        "temporary_bytes": temporary_bytes,
+        "incomplete_files": incomplete_files,
+    }
+
+
 def _copy_with_progress(src: Path, dst: Path, progress_manager, copied_so_far: int, total_bytes: int) -> int:
     """Copy a directory tree with byte-level progress tracking."""
     dst.mkdir(parents=True, exist_ok=True)
@@ -172,10 +209,65 @@ async def get_model_progress(model_name: str):
 
 @router.get("/models/cache-dir")
 async def get_models_cache_dir():
-    """Get the path to the HuggingFace model cache directory."""
+    """Get the shared model/cache path and its current disk usage."""
     from huggingface_hub import constants as hf_constants
 
-    return {"path": str(Path(hf_constants.HF_HUB_CACHE))}
+    cache_dir = Path(hf_constants.HF_HUB_CACHE)
+    return {"path": str(cache_dir), **await asyncio.to_thread(_get_cache_usage, cache_dir)}
+
+
+@router.post("/models/cache/cleanup")
+async def cleanup_models_cache():
+    """Remove interrupted downloads and stale lock files, never model weights."""
+    from huggingface_hub import constants as hf_constants
+
+    task_manager = get_task_manager()
+    active_downloads = [
+        task
+        for task in task_manager.get_active_downloads()
+        if task.status in {"downloading", "extracting"}
+    ]
+    if active_downloads:
+        raise HTTPException(
+            status_code=409,
+            detail="Wait for active model downloads to finish or cancel them before cleaning the cache.",
+        )
+
+    cache_dir = Path(hf_constants.HF_HUB_CACHE)
+    removed_files = 0
+    freed_bytes = 0
+    candidates: list[Path] = []
+    if cache_dir.exists():
+        candidates.extend(cache_dir.rglob("*.incomplete"))
+        locks_dir = cache_dir / ".locks"
+        if locks_dir.exists():
+            candidates.extend(item for item in locks_dir.rglob("*") if item.is_file())
+
+    for item in candidates:
+        try:
+            freed_bytes += item.stat().st_size
+            item.unlink()
+            removed_files += 1
+        except OSError:
+            continue
+
+    if cache_dir.exists():
+        directories = sorted(
+            (item for item in cache_dir.rglob("*") if item.is_dir()),
+            key=lambda item: len(item.parts),
+            reverse=True,
+        )
+        for directory in directories:
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+
+    return {
+        "removed_files": removed_files,
+        "freed_bytes": freed_bytes,
+        **await asyncio.to_thread(_get_cache_usage, cache_dir),
+    }
 
 
 @router.post("/models/migrate")

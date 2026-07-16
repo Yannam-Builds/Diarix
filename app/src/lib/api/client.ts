@@ -630,8 +630,25 @@ class ApiClient {
     return this.request<ModelStatusListResponse>('/models/catalog');
   }
 
-  async getModelsCacheDir(): Promise<{ path: string }> {
-    return this.request<{ path: string }>('/models/cache-dir');
+  async getModelsCacheDir(): Promise<{
+    path: string;
+    total_bytes: number;
+    model_bytes: number;
+    temporary_bytes: number;
+    incomplete_files: number;
+  }> {
+    return this.request('/models/cache-dir');
+  }
+
+  async cleanupModelsCache(): Promise<{
+    removed_files: number;
+    freed_bytes: number;
+    total_bytes: number;
+    model_bytes: number;
+    temporary_bytes: number;
+    incomplete_files: number;
+  }> {
+    return this.request('/models/cache/cleanup', { method: 'POST' });
   }
 
   async migrateModels(
