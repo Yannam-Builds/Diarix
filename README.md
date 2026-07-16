@@ -1,8 +1,4 @@
 <p align="center">
-  <img src=".github/assets/diarix-logo-exact.svg" alt="Diarix logo" width="104" />
-</p>
-
-<p align="center">
   <img src=".github/assets/diarix-hero.svg" alt="Diarix — local speech intelligence" width="100%" />
 </p>
 
