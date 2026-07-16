@@ -23,6 +23,36 @@ router = APIRouter()
 UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1 MB
 
 
+@router.post("/capture/warm")
+async def warm_capture_model_endpoint(db: Session = Depends(get_db)):
+    """Warm the selected STT model while the user is still recording."""
+    from ..services.model_lifecycle import stt_model_lifecycle
+
+    saved = settings_service.get_capture_settings(db)
+    try:
+        config_model = resolve_stt_config(saved.stt_model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not is_model_cached(config_model.hf_repo_id):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{config_model.display_name} is not downloaded",
+        )
+
+    try:
+        await stt_model_lifecycle.warm_model(config_model)
+    except Exception as exc:
+        logger.exception("Failed to warm dictation model %s", config_model.model_name)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    return {
+        "model_name": config_model.model_name,
+        "display_name": config_model.display_name,
+        "loaded": True,
+    }
+
+
 @router.post("/captures", response_model=models.CaptureCreateResponse)
 async def create_capture_endpoint(
     file: UploadFile = File(...),

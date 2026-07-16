@@ -42,6 +42,7 @@ def run_migrations(engine) -> None:
     _migrate_effect_presets(engine, inspector, tables)
     _migrate_generation_versions(engine, inspector, tables)
     _migrate_capture_settings(engine, inspector, tables)
+    _migrate_dictation_model_lifecycle(engine, inspector, tables)
     _migrate_mcp_bindings(engine, inspector, tables)
     _normalize_storage_paths(engine, tables)
 
@@ -297,6 +298,19 @@ def _supports_drop_column(engine) -> bool:
     if engine.dialect.name != "sqlite":
         return True
     return tuple(int(p) for p in sqlite3.sqlite_version.split(".")[:3]) >= (3, 35, 0)
+
+
+def _migrate_dictation_model_lifecycle(engine, inspector, tables: set[str]) -> None:
+    if "capture_settings" not in tables:
+        return
+    columns = _get_columns(inspector, "capture_settings")
+    if "model_unload_timeout_seconds" not in columns:
+        _add_column(
+            engine,
+            "capture_settings",
+            "model_unload_timeout_seconds INTEGER NOT NULL DEFAULT 300",
+            "model_unload_timeout_seconds",
+        )
 
 
 def _normalize_storage_paths(engine, tables: set[str]) -> None:

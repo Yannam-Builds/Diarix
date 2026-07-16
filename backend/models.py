@@ -301,6 +301,7 @@ class CaptureSettingsResponse(BaseModel):
     chord_toggle_to_talk_keys: List[str] = Field(
         default_factory=default_toggle_to_talk_chord
     )
+    model_unload_timeout_seconds: int = Field(default=300)
 
     class Config:
         from_attributes = True
@@ -322,6 +323,7 @@ class CaptureSettingsUpdate(BaseModel):
     hotkey_enabled: Optional[bool] = None
     chord_push_to_talk_keys: Optional[List[str]] = Field(default=None, min_length=1, max_length=6)
     chord_toggle_to_talk_keys: Optional[List[str]] = Field(default=None, min_length=1, max_length=6)
+    model_unload_timeout_seconds: Optional[int] = None
 
 
 class GenerationSettingsResponse(BaseModel):
