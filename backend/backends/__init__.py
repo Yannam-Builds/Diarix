@@ -1158,6 +1158,13 @@ def unload_all_stt_backends() -> None:
         backend.unload_model()
 
 
+def unload_other_stt_backends(selected_engine: str) -> None:
+    """Keep at most one STT engine family resident in memory."""
+    for engine, backend in list(_stt_backends.items()):
+        if engine != selected_engine and backend.is_loaded():
+            backend.unload_model()
+
+
 def resolve_stt_config(model: Optional[str]) -> ModelConfig:
     """Resolve a global model id or a legacy Whisper size to an STT config."""
     requested = model or "whisper-turbo"

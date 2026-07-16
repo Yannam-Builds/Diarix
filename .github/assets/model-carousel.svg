@@ -1,0 +1,125 @@
+<svg width="1200" height="430" viewBox="0 0 1200 430" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Diarix model runtime carousel</title>
+  <desc id="desc">Animated cards rotate through Diarix transcription, voice, and refinement runtimes.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#080808"/>
+      <stop offset=".5" stop-color="#11100D"/>
+      <stop offset="1" stop-color="#080808"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="210" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B1913"/>
+      <stop offset="1" stop-color="#0D0D0C"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#E0C15D"/>
+      <stop offset="1" stop-color="#8D6B24"/>
+    </linearGradient>
+    <radialGradient id="spot" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(600 232) rotate(90) scale(175 390)">
+      <stop stop-color="#B89432" stop-opacity=".14"/>
+      <stop offset="1" stop-color="#B89432" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="shadow" x="-35%" y="-35%" width="170%" height="190%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity=".7"/>
+    </filter>
+    <clipPath id="frame"><rect width="1200" height="430" rx="24"/></clipPath>
+
+    <g id="whisper">
+      <rect x="-105" y="-120" width="210" height="240" rx="22" fill="url(#card)" stroke="#7D672D"/>
+      <circle cy="-68" r="28" fill="#B89432" fill-opacity=".15" stroke="#B89432" stroke-opacity=".45"/>
+      <path d="M-16-68H-11M-7-79V-57M0-86V-50M7-78V-58M13-73V-63M18-68H22" stroke="#E2C968" stroke-width="3.2" stroke-linecap="round"/>
+      <text y="-15" fill="#F5F1E8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="650" text-anchor="middle">Whisper</text>
+      <text y="14" fill="#999486" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" text-anchor="middle">Reliable multilingual ASR</text>
+      <rect x="-70" y="42" width="140" height="26" rx="13" fill="#B89432" fill-opacity=".12"/>
+      <text y="60" fill="#CCB45F" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">TRANSCRIPTION</text>
+      <text y="96" fill="#777268" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">CPU · CUDA · local</text>
+    </g>
+    <g id="faster">
+      <rect x="-105" y="-120" width="210" height="240" rx="22" fill="url(#card)" stroke="#496A60"/>
+      <circle cy="-68" r="28" fill="#62D49A" fill-opacity=".12" stroke="#62D49A" stroke-opacity=".38"/>
+      <path d="M-14-57L-2-80H8L1-68H15L-7-51L-1-63H-14Z" fill="#7CE2AE"/>
+      <text y="-15" fill="#F5F1E8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="650" text-anchor="middle">Faster-Whisper</text>
+      <text y="14" fill="#999486" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" text-anchor="middle">Streaming partial chunks</text>
+      <rect x="-70" y="42" width="140" height="26" rx="13" fill="#62D49A" fill-opacity=".1"/>
+      <text y="60" fill="#7CE2AE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">LIVE PROGRESS</text>
+      <text y="96" fill="#777268" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">CTranslate2</text>
+    </g>
+    <g id="canary">
+      <rect x="-105" y="-120" width="210" height="240" rx="22" fill="url(#card)" stroke="#536C8E"/>
+      <circle cy="-68" r="28" fill="#77A8FF" fill-opacity=".12" stroke="#77A8FF" stroke-opacity=".4"/>
+      <path d="M-14-74C-2-88 15-77 14-63C12-50-4-48-15-58C-7-58 1-61 5-68C-2-65-9-66-14-74Z" fill="#8EB6FF"/>
+      <text y="-15" fill="#F5F1E8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="650" text-anchor="middle">NVIDIA Canary</text>
+      <text y="14" fill="#999486" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" text-anchor="middle">NeMo speech intelligence</text>
+      <rect x="-70" y="42" width="140" height="26" rx="13" fill="#77A8FF" fill-opacity=".1"/>
+      <text y="60" fill="#8EB6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">ADVANCED ASR</text>
+      <text y="96" fill="#777268" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">CUDA optimized</text>
+    </g>
+    <g id="qwenasr">
+      <rect x="-105" y="-120" width="210" height="240" rx="22" fill="url(#card)" stroke="#735C8C"/>
+      <circle cy="-68" r="28" fill="#B78AFF" fill-opacity=".12" stroke="#B78AFF" stroke-opacity=".4"/>
+      <path d="M-15-75L0-84L15-75V-59L0-50L-15-59Z" stroke="#C5A2FF" stroke-width="3"/><circle cy="-67" r="6" fill="#C5A2FF"/>
+      <text y="-15" fill="#F5F1E8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="650" text-anchor="middle">Qwen3-ASR</text>
+      <text y="14" fill="#999486" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" text-anchor="middle">Modern multilingual ASR</text>
+      <rect x="-70" y="42" width="140" height="26" rx="13" fill="#B78AFF" fill-opacity=".1"/>
+      <text y="60" fill="#C5A2FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">LANGUAGE AWARE</text>
+      <text y="96" fill="#777268" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">0.6B · 1.7B</text>
+    </g>
+    <g id="tts">
+      <rect x="-105" y="-120" width="210" height="240" rx="22" fill="url(#card)" stroke="#8C5555"/>
+      <circle cy="-68" r="28" fill="#F18484" fill-opacity=".1" stroke="#F18484" stroke-opacity=".38"/>
+      <path d="M-15-73V-61H-7L3-53V-81L-7-73H-15ZM8-75C15-69 15-63 8-57" stroke="#FF9A9A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <text y="-15" fill="#F5F1E8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="650" text-anchor="middle">Voice Studio</text>
+      <text y="14" fill="#999486" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" text-anchor="middle">Local TTS and cloning</text>
+      <rect x="-70" y="42" width="140" height="26" rx="13" fill="#F18484" fill-opacity=".09"/>
+      <text y="60" fill="#FF9A9A" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">QWEN · KOKORO</text>
+      <text y="96" fill="#777268" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">Profiles · stories</text>
+    </g>
+    <g id="refine">
+      <rect x="-105" y="-120" width="210" height="240" rx="22" fill="url(#card)" stroke="#687247"/>
+      <circle cy="-68" r="28" fill="#B6CE69" fill-opacity=".1" stroke="#B6CE69" stroke-opacity=".38"/>
+      <path d="M0-84L5-72L18-67L5-62L0-50L-5-62L-18-67L-5-72Z" fill="#C7DB83"/>
+      <text y="-15" fill="#F5F1E8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="22" font-weight="650" text-anchor="middle">Local Refine</text>
+      <text y="14" fill="#999486" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" text-anchor="middle">Clean text without an API key</text>
+      <rect x="-70" y="42" width="140" height="26" rx="13" fill="#B6CE69" fill-opacity=".09"/>
+      <text y="60" fill="#C7DB83" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">QWEN3 LOCAL</text>
+      <text y="96" fill="#777268" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="11" text-anchor="middle">Raw stays untouched</text>
+    </g>
+  </defs>
+
+  <g clip-path="url(#frame)">
+    <rect width="1200" height="430" rx="24" fill="url(#bg)"/>
+    <rect width="1200" height="430" fill="url(#spot)"/>
+    <text x="600" y="46" fill="#EEE9DE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="600" letter-spacing="2.2" text-anchor="middle">ONE STUDIO · MANY LOCAL RUNTIMES</text>
+    <path d="M80 354C295 267 407 383 600 302C793 221 922 365 1120 278" stroke="url(#accent)" stroke-opacity=".2"/>
+
+    <g filter="url(#shadow)">
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-150 270;150 250;365 232;600 210;835 232;1050 250;1350 270;-150 270" dur="30s" begin="0s" repeatCount="indefinite"/>
+        <g><animateTransform attributeName="transform" type="scale" values=".62;.72;.86;1;.86;.72;.62;.62" dur="30s" repeatCount="indefinite"/><use href="#whisper"/></g>
+      </g>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-150 270;150 250;365 232;600 210;835 232;1050 250;1350 270;-150 270" dur="30s" begin="-5s" repeatCount="indefinite"/>
+        <g><animateTransform attributeName="transform" type="scale" values=".62;.72;.86;1;.86;.72;.62;.62" dur="30s" begin="-5s" repeatCount="indefinite"/><use href="#faster"/></g>
+      </g>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-150 270;150 250;365 232;600 210;835 232;1050 250;1350 270;-150 270" dur="30s" begin="-10s" repeatCount="indefinite"/>
+        <g><animateTransform attributeName="transform" type="scale" values=".62;.72;.86;1;.86;.72;.62;.62" dur="30s" begin="-10s" repeatCount="indefinite"/><use href="#canary"/></g>
+      </g>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-150 270;150 250;365 232;600 210;835 232;1050 250;1350 270;-150 270" dur="30s" begin="-15s" repeatCount="indefinite"/>
+        <g><animateTransform attributeName="transform" type="scale" values=".62;.72;.86;1;.86;.72;.62;.62" dur="30s" begin="-15s" repeatCount="indefinite"/><use href="#qwenasr"/></g>
+      </g>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-150 270;150 250;365 232;600 210;835 232;1050 250;1350 270;-150 270" dur="30s" begin="-20s" repeatCount="indefinite"/>
+        <g><animateTransform attributeName="transform" type="scale" values=".62;.72;.86;1;.86;.72;.62;.62" dur="30s" begin="-20s" repeatCount="indefinite"/><use href="#tts"/></g>
+      </g>
+      <g>
+        <animateTransform attributeName="transform" type="translate" values="-150 270;150 250;365 232;600 210;835 232;1050 250;1350 270;-150 270" dur="30s" begin="-25s" repeatCount="indefinite"/>
+        <g><animateTransform attributeName="transform" type="scale" values=".62;.72;.86;1;.86;.72;.62;.62" dur="30s" begin="-25s" repeatCount="indefinite"/><use href="#refine"/></g>
+      </g>
+    </g>
+
+    <rect width="130" height="430" fill="url(#bg)" opacity=".72"/>
+    <rect x="1070" width="130" height="430" fill="url(#bg)" opacity=".72"/>
+  </g>
+</svg>

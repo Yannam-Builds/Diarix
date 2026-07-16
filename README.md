@@ -1,105 +1,107 @@
 <p align="center">
-  <img src="app/src/assets/diarix-logo.png" alt="Diarix" width="112" />
-</p>
-
-<h1 align="center">Diarix</h1>
-
-<p align="center">
-  <strong>A transcription-first, local AI speech studio.</strong><br />
-  Transcribe audio and video, generate voices, refine text, and manage local models from one native desktop app.
+  <img src=".github/assets/diarix-hero.svg" alt="Diarix — local speech intelligence" width="100%" />
 </p>
 
 <p align="center">
-  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-b89432?style=flat-square" />
-  <img alt="Desktop" src="https://img.shields.io/badge/desktop-Tauri-171717?style=flat-square&logo=tauri" />
-  <img alt="Local first" src="https://img.shields.io/badge/inference-local--first-171717?style=flat-square" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-171717?style=flat-square" />
+  <strong>Transcription-first. Local-first. One native studio.</strong><br />
+  Turn audio, video, and live speech into useful text—then generate voices, refine drafts, and manage every local model without leaving the app.
 </p>
 
----
+<p align="center">
+  <a href="#what-diarix-does">Product</a> ·
+  <a href="#model-runtime">Models</a> ·
+  <a href="#three-interchangeable-editions">Editions</a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#development">Development</a>
+</p>
 
-Diarix turns local audio and video into useful text without splitting the workflow across separate apps or workers. Transcription is the default workspace; Voicebox-style TTS, profiles, stories, history, model management, and refinement remain integrated as focused sections of the same application.
+> Diarix is in active development. The repository is private while runtime verification, packaging, and release hardening are completed.
 
-> Diarix is under active development. Installers and signed releases are not published yet.
+## What Diarix does
 
-## What makes Diarix different
+| Transcribe anything | Dictate anywhere | Keep the full studio |
+|---|---|---|
+| Drop audio or video—including MP4—onto the default dashboard. FFprobe inspects the source and FFmpeg creates model-ready audio without touching the original. | Use push-to-talk or toggle dictation from any app. Diarix restores focus, pastes the result, warms the selected model while you speak, and releases VRAM after the chosen idle period. | Voice generation, profiles, stories, captures, history, local refinement, downloads, cancellation, and GPU controls remain separate but integrated sections. |
 
-| | |
+### Built around honest local work
+
+- Real task stages from media inspection through export
+- Live partial transcript chunks where the selected engine exposes them
+- Model-specific languages, precision, memory guidance, and audio normalization
+- Shared model downloads when multiple runtimes use the same checkpoint
+- Silent bundled servers with no terminal windows in production
+- Local transcripts, audio, profiles, model weights, and generated voices
+
+## Model runtime
+
+<p align="center">
+  <img src=".github/assets/model-carousel.svg" alt="Animated Diarix model runtime carousel" width="100%" />
+</p>
+
+Diarix uses one catalog and one cache across standard Whisper, Faster-Whisper, WhisperX, NVIDIA NeMo models, Qwen3-ASR, local TTS engines, and Qwen3 refinement. Runtime choices stay distinct when their behavior differs, while duplicate checkpoint downloads collapse into one physical weight group.
+
+| Workload | Current runtime families |
 |---|---|
-| **Transcription first** | Drop audio or video directly onto the dashboard, choose a model, and follow the real task state from media inspection through export. |
-| **Local model choice** | Standard Whisper, Faster-Whisper, WhisperX, NVIDIA NeMo models, Qwen3-ASR, and local Qwen refinement share one catalog and cache. |
-| **Real media ingestion** | FFprobe inspects every source and FFmpeg normalizes audio to the exact sample rate, channel layout, codec, and container required by the selected model. |
-| **One task architecture** | Downloads, generation, transcription, progress, cancellation, caching, and GPU lifecycle use the same native server architecture. |
-| **Speech in both directions** | Keep transcription, dictation, voice cloning, preset voices, TTS generation, stories, and history in one workstation. |
-| **Private by default** | Media, transcripts, profiles, model weights, and generated speech remain on the user's machine. |
+| Transcription | Whisper, Faster-Whisper, Distil-Whisper, WhisperX, NVIDIA Parakeet, NVIDIA Canary, Canary-Qwen, Qwen3-ASR |
+| Voice | Qwen3-TTS, Qwen CustomVoice, LuxTTS, Chatterbox, TADA, Kokoro |
+| Refinement | Local Qwen3 instruction models |
+| Media | Central FFprobe inspection and FFmpeg normalization |
 
-## Desktop workspace
+## Three interchangeable editions
 
-```text
-Transcription       Audio/video → normalized media → live transcript → TXT/SRT/VTT/JSON
-Voice generation    Profiles → local TTS engine → generated audio → versions/effects
-Captures            Dictation and imported recordings → raw/refined searchable text
-Stories             Multi-voice composition and timeline workflows
-Models              Shared downloads, readiness, progress, unload, and deletion
-Settings            Storage, resource controls, GPU backend, logs, and application state
+Every edition uses the same data directory, task API, model catalog, cache, captures, profiles, and history. Moving between them must never duplicate or migrate user data.
+
+| Edition | Ships with | Can add later |
+|---|---|---|
+| **Diarix** | Native desktop app and lightweight core | whisper.cpp and CUDA/Advanced ASR servers |
+| **Diarix + whisper.cpp** | Desktop app plus compact local transcription | CUDA/Advanced ASR and individual models |
+| **Diarix Full** | Desktop app plus the complete CUDA-capable model server | Any model from the in-app catalog |
+
+## Dictation lifecycle
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Tauri as Diarix desktop
+    participant API as Local task API
+    participant STT as Selected STT engine
+
+    User->>Tauri: Press push-to-talk
+    Tauri->>API: Warm selected model
+    API->>STT: Load once or reuse warm model
+    User->>Tauri: Speak and release
+    Tauri->>API: Upload normalized capture
+    API->>STT: Transcribe through shared lifecycle lock
+    STT-->>API: Text and model identity
+    API-->>Tauri: Persist capture
+    Tauri-->>User: Restore focus and paste
+    API->>STT: Unload after configured idle timeout
 ```
 
-## Runtime editions
-
-Diarix is being packaged as three interchangeable editions. They use the same application data, model catalog, task APIs, and project files.
-
-| Edition | Included | Optional later |
-|---|---|---|
-| **Diarix** | Desktop app and lightweight core server | whisper.cpp server or CUDA server |
-| **Diarix + whisper.cpp** | Desktop app plus a compact local transcription backend | CUDA/Advanced ASR runtime and additional models |
-| **Diarix Full** | Desktop app plus the complete CUDA-capable model server | Individual model downloads through the app |
-
-Changing editions must not migrate or duplicate user data. A downloaded model should be recognized by every compatible server, and models that share the same Hugging Face repository should share one physical cache entry.
-
-## Transcription engines
-
-The catalog currently covers:
-
-- OpenAI Whisper: Base, Small, Medium, Large v3, and Large v3 Turbo
-- Distil-Whisper and Faster-Whisper variants
-- WhisperX with aligned timestamps
-- NVIDIA Parakeet and Canary families through NeMo
-- NVIDIA Canary-Qwen
-- Qwen3-ASR
-
-Model-specific languages, precision choices, memory guidance, and normalized audio requirements are declared in the backend registry and surfaced by the app.
-
-## Voice and refinement engines
-
-- Qwen3-TTS Base and CustomVoice
-- LuxTTS
-- Chatterbox Multilingual and Chatterbox Turbo
-- HumeAI TADA
-- Kokoro
-- Qwen3 local refinement models
+The model is never unloaded during an active transcription. Switching model families releases the previous engine before the next one loads, avoiding the peak memory cost of holding both at once.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    UI["Tauri desktop app"] --> API["Diarix local API"]
-    API --> TASKS["Shared task queue"]
+    UI["Tauri desktop"] --> API["Diarix local API"]
+    API --> TASKS["Shared tasks, progress, cancellation"]
     API --> MEDIA["FFprobe + FFmpeg ingestion"]
-    TASKS --> CORE["Core / whisper.cpp server"]
-    TASKS --> CUDA["CUDA / Advanced ASR server"]
+    TASKS --> CORE["Core / whisper.cpp runtime"]
+    TASKS --> CUDA["CUDA / Advanced runtime"]
     MEDIA --> STT["Transcription engines"]
     CORE --> STT
     CUDA --> STT
-    CUDA --> TTS["TTS engines"]
+    CUDA --> TTS["Voice engines"]
     CUDA --> LLM["Local refinement"]
-    STT --> HISTORY["Transcripts and exports"]
+    STT --> HISTORY["Captures, history, exports"]
     TTS --> HISTORY
     LLM --> HISTORY
     CACHE[("Shared model cache")] --- CORE
     CACHE --- CUDA
 ```
 
-The server is bundled and launched silently by Tauri. Diarix does not require a separately managed Python worker or a visible terminal window.
+The server is bundled and launched silently by Tauri. Diarix does not require a separately managed Python worker.
 
 ## Development
 
@@ -107,11 +109,11 @@ The server is bundled and launched silently by Tauri. Diarix does not require a 
 
 - Windows 11 for the current CUDA-focused build
 - Bun
-- Rust and the Tauri prerequisites
-- Python 3.11/3.12 for backend development
+- Rust and Tauri prerequisites
+- Python 3.11 or 3.12 for backend development
 - FFmpeg and FFprobe when running outside the packaged server
 
-### Run the desktop app
+### Desktop app
 
 ```powershell
 cd tauri
@@ -119,24 +121,24 @@ bun install
 bun run tauri dev
 ```
 
-### Run backend tests
+### Backend tests
 
 ```powershell
 backend\venv\Scripts\python.exe -m pytest backend\tests -q
 ```
 
-Build and packaging scripts live in [`installer/`](installer/) and [`scripts/`](scripts/). Model weights, application caches, build logs, virtual environments, and packaged binaries are intentionally excluded from source control.
+Packaging scripts live in [`installer/`](installer/) and [`scripts/`](scripts/). Model weights, application caches, build logs, virtual environments, and packaged binaries are intentionally excluded from source control.
 
-## Current focus
+## Current release work
 
-- Complete real-inference verification across ASR, Whisper, TTS, and refinement engines
-- Prove live partial transcript chunks and honest progress in the desktop UI
-- Deduplicate catalog entries that share model weights
-- Produce interchangeable base, whisper.cpp, and full CUDA installers
-- Validate silent startup, cancellation, cache cleanup, and backend switching end to end
+- Complete real-inference verification across ASR, Whisper, TTS, and refinement
+- Compare model output quality on shared fixtures
+- Verify live chunks, progress, cancellation, idle unload, and safe model switching
+- Produce base, whisper.cpp, and full CUDA installers
+- Validate silent startup and backend interchangeability in the real Tauri app
 
 ## Upstream and license
 
-Diarix is an independent fork of [Voicebox](https://github.com/jamiepine/voicebox), created by Jamie Pine and the Voicebox contributors. The project preserves the upstream MIT license and includes substantial Diarix-specific work in transcription, media ingestion, model runtimes, desktop UX, and packaging.
+Diarix is an independent fork of [Voicebox](https://github.com/jamiepine/voicebox), created by Jamie Pine and the Voicebox contributors. It preserves the upstream MIT license and adds substantial transcription, media-ingestion, runtime, dictation, desktop UX, and packaging work.
 
 See [`LICENSE`](LICENSE), [`RESPONSIBLE_USE.md`](RESPONSIBLE_USE.md), and [`SECURITY.md`](SECURITY.md).

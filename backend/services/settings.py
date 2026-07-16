@@ -82,10 +82,20 @@ def get_capture_settings(db: Session) -> DBCaptureSettings:
 
 
 def update_capture_settings(db: Session, patch: dict[str, Any]) -> DBCaptureSettings:
+    if "model_unload_timeout_seconds" in patch:
+        from .model_lifecycle import normalize_idle_timeout
+
+        patch["model_unload_timeout_seconds"] = normalize_idle_timeout(
+            patch["model_unload_timeout_seconds"]
+        )
     row = _get_or_create_capture_row(db)
     _apply_patch(row, patch)
     db.commit()
     db.refresh(row)
+    if "model_unload_timeout_seconds" in patch:
+        from .model_lifecycle import stt_model_lifecycle
+
+        stt_model_lifecycle.reschedule_for_setting_change()
     return row
 
 

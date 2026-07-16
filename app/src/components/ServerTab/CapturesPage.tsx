@@ -153,6 +153,7 @@ export function CapturesPage() {
   const hotkeyEnabled = settings?.hotkey_enabled ?? false;
   const pushToTalkKeys = settings?.chord_push_to_talk_keys ?? defaultChordKeys('push');
   const toggleToTalkKeys = settings?.chord_toggle_to_talk_keys ?? defaultChordKeys('toggle');
+  const modelUnloadTimeout = settings?.model_unload_timeout_seconds ?? 300;
 
   const [chordEditor, setChordEditor] = useState<'push' | 'toggle' | null>(null);
   const [opening, setOpening] = useState(false);
@@ -277,6 +278,33 @@ export function CapturesPage() {
                 {t('settings.captures.dictation.toggle.change')}
               </Button>
             </div>
+          }
+        />
+
+        <SettingRow
+          title="Keep dictation model warm"
+          description="Preloads while you speak, reuses the model for nearby dictations, then releases its RAM and VRAM after the selected idle period."
+          action={
+            <Select
+              value={String(modelUnloadTimeout)}
+              onValueChange={(value) =>
+                update({ model_unload_timeout_seconds: Number(value) })
+              }
+            >
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Unload immediately</SelectItem>
+                <SelectItem value="15">15 seconds</SelectItem>
+                <SelectItem value="60">1 minute</SelectItem>
+                <SelectItem value="300">5 minutes</SelectItem>
+                <SelectItem value="600">10 minutes</SelectItem>
+                <SelectItem value="900">15 minutes</SelectItem>
+                <SelectItem value="3600">1 hour</SelectItem>
+                <SelectItem value="-1">Keep loaded</SelectItem>
+              </SelectContent>
+            </Select>
           }
         />
 

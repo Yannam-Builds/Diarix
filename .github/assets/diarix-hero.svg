@@ -1,0 +1,88 @@
+<svg width="1200" height="440" viewBox="0 0 1200 440" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Diarix — local speech intelligence</title>
+  <desc id="desc">A dark cinematic banner with animated gold wave fields and the Diarix product promise.</desc>
+  <defs>
+    <linearGradient id="bg" x1="46" y1="24" x2="1154" y2="416" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B0B0A"/>
+      <stop offset="0.48" stop-color="#12110D"/>
+      <stop offset="1" stop-color="#070707"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(600 222) rotate(90) scale(240 480)">
+      <stop stop-color="#B99538" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#B99538" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="430" y1="0" x2="770" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C6124"/>
+      <stop offset=".5" stop-color="#E1C15D"/>
+      <stop offset="1" stop-color="#8D6E29"/>
+    </linearGradient>
+    <filter id="soft" x="-20%" y="-30%" width="140%" height="160%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <clipPath id="clip">
+      <rect width="1200" height="440" rx="28"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#clip)">
+    <rect width="1200" height="440" rx="28" fill="url(#bg)"/>
+    <rect width="1200" height="440" fill="url(#glow)"/>
+
+    <g opacity=".32" stroke="url(#gold)" stroke-width="1.5">
+      <path d="M-80 243C86 146 206 326 376 228C534 137 657 318 818 225C976 134 1082 278 1280 193">
+        <animate attributeName="d" dur="8s" repeatCount="indefinite"
+          values="M-80 243C86 146 206 326 376 228C534 137 657 318 818 225C976 134 1082 278 1280 193;
+                  M-80 215C72 317 224 137 390 235C548 329 674 145 832 230C994 318 1110 151 1280 229;
+                  M-80 243C86 146 206 326 376 228C534 137 657 318 818 225C976 134 1082 278 1280 193"/>
+      </path>
+      <path d="M-90 222C68 311 209 157 371 241C530 324 681 161 834 243C993 327 1121 167 1290 230" opacity=".7">
+        <animate attributeName="d" dur="10s" repeatCount="indefinite"
+          values="M-90 222C68 311 209 157 371 241C530 324 681 161 834 243C993 327 1121 167 1290 230;
+                  M-90 252C71 151 214 322 378 226C538 132 675 316 842 218C997 128 1126 300 1290 206;
+                  M-90 222C68 311 209 157 371 241C530 324 681 161 834 243C993 327 1121 167 1290 230"/>
+      </path>
+      <path d="M-70 263C101 195 213 290 381 239C552 187 662 282 829 236C1004 188 1119 267 1270 215" opacity=".45">
+        <animateTransform attributeName="transform" type="translate" values="0 0;0 -16;0 0" dur="6s" repeatCount="indefinite"/>
+      </path>
+    </g>
+
+    <ellipse cx="600" cy="221" rx="224" ry="96" fill="#C29B38" opacity=".08" filter="url(#soft)"/>
+
+    <g transform="translate(600 91)">
+      <circle r="28" fill="#B89432" fill-opacity=".12" stroke="#D5B854" stroke-opacity=".52"/>
+      <path d="M-14 0H-10M-6-10V10M0-17V17M6-11V11M12-5V5M16 0H20" stroke="#E6D386" stroke-width="3.4" stroke-linecap="round"/>
+      <circle r="38" stroke="#B89432" stroke-opacity=".18">
+        <animate attributeName="r" values="34;45;34" dur="3s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values=".1;.45;.1" dur="3s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <text x="600" y="165" fill="#F7F5EF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="64" font-weight="650" letter-spacing="-2.5" text-anchor="middle">Diarix</text>
+    <text x="600" y="205" fill="#C7C2B6" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19" font-weight="450" letter-spacing=".35" text-anchor="middle">LOCAL SPEECH INTELLIGENCE, WITHOUT THE CLOUD</text>
+
+    <g transform="translate(300 278)">
+      <rect width="600" height="54" rx="27" fill="#0D0D0C" fill-opacity=".78" stroke="#B89432" stroke-opacity=".28"/>
+      <text x="300" y="34" fill="#E9E4D8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" text-anchor="middle">
+        Transcribe  ·  Dictate  ·  Generate  ·  Refine
+      </text>
+    </g>
+
+    <g transform="translate(390 363)" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13">
+      <g>
+        <rect width="124" height="34" rx="17" fill="#B89432" fill-opacity=".12" stroke="#B89432" stroke-opacity=".32"/>
+        <circle cx="21" cy="17" r="4" fill="#D7B94E"/>
+        <text x="36" y="22" fill="#DDD7C8">Tauri native</text>
+      </g>
+      <g transform="translate(136)">
+        <rect width="142" height="34" rx="17" fill="#B89432" fill-opacity=".12" stroke="#B89432" stroke-opacity=".32"/>
+        <circle cx="21" cy="17" r="4" fill="#62D49A"/>
+        <text x="36" y="22" fill="#DDD7C8">Local inference</text>
+      </g>
+      <g transform="translate(290)">
+        <rect width="130" height="34" rx="17" fill="#B89432" fill-opacity=".12" stroke="#B89432" stroke-opacity=".32"/>
+        <circle cx="21" cy="17" r="4" fill="#77A8FF"/>
+        <text x="36" y="22" fill="#DDD7C8">CUDA ready</text>
+      </g>
+    </g>
+  </g>
+</svg>

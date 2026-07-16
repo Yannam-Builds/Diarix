@@ -283,6 +283,13 @@ export function useCaptureRecordingSession(
     clearRestTimer();
     setFrozenElapsedMs(0);
     setPillState('recording');
+    // Begin loading the selected model while the user speaks. The capture
+    // request later shares the same backend lifecycle lock, so it either
+    // reuses the warm model or waits for this one load instead of starting a
+    // duplicate.
+    void apiClient.warmCaptureModel().catch((error) => {
+      console.warn('[dictation] model warm-up failed:', error);
+    });
     beginAudioRecording();
   }, [isRecording, beginAudioRecording, clearRestTimer]);
 

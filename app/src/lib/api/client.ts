@@ -561,6 +561,14 @@ class ApiClient {
     return this.request<CaptureReadinessResponse>('/capture/readiness');
   }
 
+  async warmCaptureModel(): Promise<{
+    model_name: string;
+    display_name: string;
+    loaded: boolean;
+  }> {
+    return this.request('/capture/warm', { method: 'POST' });
+  }
+
   async updateCaptureSettings(patch: CaptureSettingsUpdate): Promise<CaptureSettings> {
     return this.request<CaptureSettings>('/settings/captures', {
       method: 'PUT',

@@ -202,7 +202,7 @@ export interface CaptureRetranscribeRequest {
   language?: LanguageCode;
 }
 
-export interface CaptureSettings {
+  export interface CaptureSettings {
   stt_model: string;
   language: string;
   auto_refine: boolean;
@@ -219,8 +219,11 @@ export interface CaptureSettings {
   /** keytap key names. Defaults are platform-specific right-hand modifiers. */
   chord_push_to_talk_keys: string[];
   /** keytap key names. Toggle adds Space to the platform-specific PTT chord. */
-  chord_toggle_to_talk_keys: string[];
-}
+    chord_toggle_to_talk_keys: string[];
+    /** Idle seconds before the selected dictation STT model is released.
+     *  -1 keeps it warm, 0 unloads immediately. */
+    model_unload_timeout_seconds: number;
+  }
 
 export type CaptureSettingsUpdate = Partial<CaptureSettings>;
 

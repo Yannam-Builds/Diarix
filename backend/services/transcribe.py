@@ -13,6 +13,7 @@ from ..backends import (
     resolve_stt_config,
     unload_all_stt_backends,
 )
+from .model_lifecycle import stt_model_lifecycle
 
 
 def get_whisper_model() -> STTBackend:
@@ -73,17 +74,18 @@ async def transcribe_audio(
     chunk completes, for live progress display. ``segments_callback``
     receives the final timestamped segment list from engines that have one.
     """
-    backend, config = get_stt_model(model)
+    _backend, config = get_stt_model(model)
     normalized_language = None if not language or language == "auto" else language
-    text = await await_stt_operation(
-        backend.transcribe(
-            audio_path,
-            normalized_language,
-            config.model_size,
-            progress_callback=progress_callback,
-            should_stop=should_stop,
-            partial_callback=partial_callback,
-            segments_callback=segments_callback,
+    async with stt_model_lifecycle.use_model(config) as backend:
+        text = await await_stt_operation(
+            backend.transcribe(
+                audio_path,
+                normalized_language,
+                config.model_size,
+                progress_callback=progress_callback,
+                should_stop=should_stop,
+                partial_callback=partial_callback,
+                segments_callback=segments_callback,
+            )
         )
-    )
     return text, config.model_name

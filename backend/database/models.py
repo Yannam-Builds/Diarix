@@ -221,6 +221,9 @@ class CaptureSettings(Base):
     chord_toggle_to_talk_keys = Column(
         JSON, nullable=False, default=default_toggle_to_talk_chord
     )
+    # Keep the selected STT model warm between nearby dictations. -1 means
+    # never unload, 0 means immediately, positive values are idle seconds.
+    model_unload_timeout_seconds = Column(Integer, nullable=False, default=300)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
