@@ -1,4 +1,8 @@
 <p align="center">
+  <img src=".github/assets/diarix-logo-exact.svg" alt="Diarix logo" width="104" />
+</p>
+
+<p align="center">
   <img src=".github/assets/diarix-hero.svg" alt="Diarix — local speech intelligence" width="100%" />
 </p>
 
@@ -35,7 +39,9 @@
 ## Model runtime
 
 <p align="center">
-  <img src=".github/assets/model-carousel.svg" alt="Animated Diarix model runtime carousel" width="100%" />
+  <img src=".github/assets/runtime-asr.svg" alt="Animated Diarix speech-to-text runtimes" width="32%" />
+  <img src=".github/assets/runtime-tts.svg" alt="Animated Diarix text-to-speech runtimes" width="32%" />
+  <img src=".github/assets/runtime-refinement.svg" alt="Animated Diarix refinement runtimes" width="32%" />
 </p>
 
 Diarix uses one catalog and one cache across standard Whisper, Faster-Whisper, WhisperX, NVIDIA NeMo models, Qwen3-ASR, local TTS engines, and Qwen3 refinement. Runtime choices stay distinct when their behavior differs, while duplicate checkpoint downloads collapse into one physical weight group.

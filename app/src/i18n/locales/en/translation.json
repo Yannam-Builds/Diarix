@@ -1215,8 +1215,12 @@
     },
     "storage": {
       "location": "Storage location",
+      "title": "Model storage & cache",
+      "description": "New downloads, shared checkpoints, and temporary download files use this folder.",
+      "usage": "{{models}} models · {{temporary}} temporary",
       "open": "Open",
       "change": "Change",
+      "cleanCache": "Clean temporary cache",
       "migrating": "Migrating…",
       "reset": "Reset",
       "pickerTitle": "Choose model storage folder"
@@ -1277,11 +1281,15 @@
       "unloadedDescription": "{{name}} has been unloaded from memory.",
       "unloadFailed": "Unload failed",
       "openFolderFailed": "Failed to open model folder",
+      "cacheCleaned": "Temporary cache cleaned",
+      "cacheCleanedDescription": "Freed {{size}} without deleting downloaded models.",
+      "cacheCleanupFailed": "Cache cleanup failed",
       "pickerFailed": "Failed to open folder picker",
       "resetToDefault": "Reset to default location. Restarting server…",
       "noModelsToMigrate": "No models to migrate",
       "noModelsToMigrateDescription": "Download at least one model before changing the storage location.",
       "migrated": "Models moved successfully",
+      "storageChanged": "Model storage location changed",
       "migrationFailed": "Migration failed",
       "migrationFailedGeneric": "Failed to migrate models",
       "migrationConnectionLost": "Lost connection during migration"

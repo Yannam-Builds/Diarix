@@ -153,6 +153,7 @@ export function ModelManagement() {
     status: string;
   } | null>(null);
   const [pendingMigrateDir, setPendingMigrateDir] = useState<string | null>(null);
+  const [cleaningCache, setCleaningCache] = useState(false);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadingDisplayName, setDownloadingDisplayName] = useState<string | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
@@ -473,20 +474,35 @@ export function ModelManagement() {
         <p className="text-sm text-muted-foreground">{t('models.subtitle')}</p>
       </div>
 
-      {/* Model storage location */}
+      {/* Shared model storage and disposable download cache */}
       {platform.metadata.isTauri && cacheDir && (
-        <div className="shrink-0 pb-4 border-b mb-4">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <span className="text-xs text-muted-foreground">{t('models.storage.location')}</span>
+        <div className="mb-5 shrink-0 rounded-lg border bg-muted/15 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <HardDrive className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <div>
+                  <p className="text-sm font-medium">{t('models.storage.title')}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {t('models.storage.description')}
+                  </p>
+                </div>
+                <p className="text-xs tabular-nums text-muted-foreground">
+                  {t('models.storage.usage', {
+                    models: formatBytes(cacheDir.model_bytes),
+                    temporary: formatBytes(cacheDir.temporary_bytes),
+                  })}
+                </p>
+              </div>
               <p
-                className="text-xs font-mono text-muted-foreground/70 truncate"
+                className="mt-2 truncate font-mono text-[11px] text-muted-foreground/75"
                 title={cacheDir.path}
               >
                 {cacheDir.path}
               </p>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
+          </div>
+          <div className="mt-3 flex flex-wrap items-center justify-end gap-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -526,6 +542,42 @@ export function ModelManagement() {
                 )}
                 {migrating ? t('models.storage.migrating') : t('models.storage.change')}
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground"
+                disabled={cleaningCache || cacheDir.temporary_bytes === 0}
+                onClick={async () => {
+                  setCleaningCache(true);
+                  try {
+                    const result = await apiClient.cleanupModelsCache();
+                    await queryClient.invalidateQueries({ queryKey: ['modelsCacheDir'] });
+                    await queryClient.invalidateQueries({ queryKey: ['modelStatus'] });
+                    toast({
+                      title: t('models.toast.cacheCleaned'),
+                      description: t('models.toast.cacheCleanedDescription', {
+                        size: formatBytes(result.freed_bytes),
+                      }),
+                    });
+                  } catch (error) {
+                    toast({
+                      title: t('models.toast.cacheCleanupFailed'),
+                      description:
+                        error instanceof Error ? error.message : t('common.unknownError'),
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setCleaningCache(false);
+                  }
+                }}
+              >
+                {cleaningCache ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3 w-3" />
+                )}
+                {t('models.storage.cleanCache')}
+              </Button>
               {customModelsDir && (
                 <Button
                   variant="ghost"
@@ -543,7 +595,6 @@ export function ModelManagement() {
                   {t('models.storage.reset')}
                 </Button>
               )}
-            </div>
           </div>
         </div>
       )}
@@ -1059,41 +1110,31 @@ export function ModelManagement() {
                   // Start the migration (background task)
                   const migrationResult = await apiClient.migrateModels(newDir);
 
-                  // If no models to migrate, warn user and skip the change
-                  if (migrationResult.moved === 0) {
-                    setMigrating(false);
-                    setMigrationProgress(null);
-                    toast({
-                      title: t('models.toast.noModelsToMigrate'),
-                      description: t('models.toast.noModelsToMigrateDescription'),
-                    });
-                    setPendingMigrateDir(null);
-                    return;
-                  }
-
-                  // Connect to SSE for progress
-                  await new Promise<void>((resolve, reject) => {
-                    const es = new EventSource(apiClient.getMigrationProgressUrl());
-                    es.onmessage = (event) => {
-                      try {
-                        const data = JSON.parse(event.data);
-                        setMigrationProgress(data);
-                        if (data.status === 'complete') {
-                          es.close();
-                          resolve();
-                        } else if (data.status === 'error') {
-                          es.close();
-                          reject(new Error(data.error || t('models.toast.migrationFailed')));
+                  if (migrationResult.moved > 0) {
+                    // Only subscribe when model directories are actually moving.
+                    await new Promise<void>((resolve, reject) => {
+                      const es = new EventSource(apiClient.getMigrationProgressUrl());
+                      es.onmessage = (event) => {
+                        try {
+                          const data = JSON.parse(event.data);
+                          setMigrationProgress(data);
+                          if (data.status === 'complete') {
+                            es.close();
+                            resolve();
+                          } else if (data.status === 'error') {
+                            es.close();
+                            reject(new Error(data.error || t('models.toast.migrationFailed')));
+                          }
+                        } catch {
+                          /* ignore parse errors */
                         }
-                      } catch {
-                        /* ignore parse errors */
-                      }
-                    };
-                    es.onerror = () => {
-                      es.close();
-                      reject(new Error(t('models.toast.migrationConnectionLost')));
-                    };
-                  });
+                      };
+                      es.onerror = () => {
+                        es.close();
+                        reject(new Error(t('models.toast.migrationConnectionLost')));
+                      };
+                    });
+                  }
 
                   setCustomModelsDir(newDir);
                   setMigrationProgress({
@@ -1105,7 +1146,12 @@ export function ModelManagement() {
                   });
                   await platform.lifecycle.restartServer(newDir);
                   queryClient.invalidateQueries();
-                  toast({ title: t('models.toast.migrated') });
+                  toast({
+                    title:
+                      migrationResult.moved > 0
+                        ? t('models.toast.migrated')
+                        : t('models.toast.storageChanged'),
+                  });
                 } catch (e) {
                   toast({
                     title: t('models.toast.migrationFailed'),
