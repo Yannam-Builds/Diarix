@@ -33,6 +33,9 @@ import type {
   StoryItemVersionUpdate,
   StoryItemVolumeUpdate,
   StoryResponse,
+  TranscriptionJob,
+  TranscriptionJobRequest,
+  TranscriptionJobStartResponse,
   TranscriptionResponse,
   VoiceProfileCreate,
   VoiceProfileResponse,
@@ -48,6 +51,8 @@ import type {
   CaptureSource,
   GenerationSettings,
   GenerationSettingsUpdate,
+  ResourceSettings,
+  ResourceSettingsUpdate,
   MCPClientBinding,
   MCPClientBindingListResponse,
   MCPClientBindingUpsert,
@@ -425,11 +430,67 @@ class ApiClient {
     return response.json();
   }
 
-  // Captures
-  async listCaptures(limit = 50, offset = 0): Promise<CaptureListResponse> {
-    return this.request<CaptureListResponse>(
-      `/captures?limit=${limit}&offset=${offset}`,
+  async createTranscriptionJob(
+    request: TranscriptionJobRequest,
+  ): Promise<TranscriptionJobStartResponse> {
+    const formData = new FormData();
+    for (const file of request.files) {
+      formData.append('files[]', file, file.name);
+    }
+    formData.append('model', request.model);
+    formData.append('language', request.language);
+    formData.append('precision', request.precision);
+    formData.append('output_suffix', request.output_suffix);
+    formData.append('output_dir', request.output_dir);
+    if (request.export_formats) {
+      formData.append('export_formats', request.export_formats);
+    }
+    if (request.silence_paragraphs) {
+      formData.append('silence_paragraphs', 'true');
+    }
+
+    const response = await fetch(this.getBaseUrl() + '/transcription/jobs', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new Error(
+        formatErrorDetail(error.detail, 'HTTP error! status: ' + response.status),
+      );
+    }
+    return response.json();
+  }
+
+  async getTranscriptionJob(taskId: string): Promise<TranscriptionJob> {
+    return this.request<TranscriptionJob>(
+      '/transcription/jobs/' + encodeURIComponent(taskId),
     );
+  }
+
+  getTranscriptionJobProgressUrl(taskId: string): string {
+    return (
+      this.getBaseUrl() +
+      '/transcription/jobs/' +
+      encodeURIComponent(taskId) +
+      '/progress'
+    );
+  }
+
+  async cancelTranscriptionJob(taskId: string): Promise<TranscriptionJob> {
+    return this.request<TranscriptionJob>(
+      '/transcription/jobs/' + encodeURIComponent(taskId) + '/cancel',
+      { method: 'POST' },
+    );
+  }
+
+  // Captures
+  async listCaptures(limit = 50, offset = 0, search?: string): Promise<CaptureListResponse> {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (search?.trim()) {
+      params.set('search', search.trim());
+    }
+    return this.request<CaptureListResponse>(`/captures?${params.toString()}`);
   }
 
   async getCapture(captureId: string): Promise<CaptureResponse> {
@@ -520,6 +581,17 @@ class ApiClient {
     });
   }
 
+  async getResourceSettings(): Promise<ResourceSettings> {
+    return this.request<ResourceSettings>('/settings/resources');
+  }
+
+  async updateResourceSettings(patch: ResourceSettingsUpdate): Promise<ResourceSettings> {
+    return this.request<ResourceSettings>('/settings/resources', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+  }
+
   // MCP bindings — per-MCP-client voice/engine/personality mapping.
   async listMCPBindings(): Promise<MCPClientBindingListResponse> {
     return this.request<MCPClientBindingListResponse>('/mcp/bindings');
@@ -544,6 +616,10 @@ class ApiClient {
   // Model Management
   async getModelStatus(): Promise<ModelStatusListResponse> {
     return this.request<ModelStatusListResponse>('/models/status');
+  }
+
+  async getModelCatalog(): Promise<ModelStatusListResponse> {
+    return this.request<ModelStatusListResponse>('/models/catalog');
   }
 
   async getModelsCacheDir(): Promise<{ path: string }> {

@@ -46,11 +46,11 @@ export function getDefaultServerUrl(): string {
   return fallback;
 }
 
-export function isLoopbackVoiceboxServerUrl(url: string): boolean {
+export function isLoopbackDiarixServerUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return (
-      parsed.port === '17493' &&
+      (parsed.port === '17493' || parsed.port === '17494') &&
       (parsed.hostname === '127.0.0.1' ||
         parsed.hostname === 'localhost' ||
         parsed.hostname === '[::1]' ||

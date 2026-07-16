@@ -92,7 +92,7 @@ The bundled LLM is **Qwen3**, available in three sizes:
 | Qwen3 1.7B | ~1.1 GB | Sweet spot for character personalities with specific phrasing. |
 | Qwen3 4B | ~2.5 GB | Full quality. Slowest. Useful for very particular tone. |
 
-The model runs through the same backend split Voicebox already uses for TTS
+The model runs through the same backend split Diarix already uses for TTS
 — **MLX** (4-bit community quants) on Apple Silicon, **PyTorch** (transformers
 `AutoModelForCausalLM`) everywhere else. Downloads go through the same cache
 and model-management UI as TTS models.
@@ -113,7 +113,7 @@ has a personality set.
   </Step>
   <Step title="Speak in character — toggle persona rewrite">
     Type (or dictate) what you want said. Flip the wand toggle on. Hit
-    generate — Voicebox runs the text through the personality LLM first,
+    generate — Diarix runs the text through the personality LLM first,
     then TTS speaks the rewritten version. Leave the toggle off for plain
     TTS.
   </Step>
@@ -129,7 +129,7 @@ until you flip it back off.
   the built-in [MCP Server](/overview/mcp-server) so Claude Code, Cursor,
   Cline, or any MCP-aware agent can talk back through a profile with a
   personality. The agent calls `voicebox.speak({ text, profile, personality:
-  true })` and Voicebox rewrites the text in character before speaking.
+  true })` and Diarix rewrites the text in character before speaking.
 - **Interactive characters.** Games, narrative tools, accessibility
   experiences. A character with a personality description plus a cloned
   voice becomes a reusable prop.

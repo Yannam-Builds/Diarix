@@ -294,7 +294,7 @@ async def export_profile(
         safe_name = "".join(c for c in profile.name if c.isalnum() or c in (" ", "-", "_")).strip()
         if not safe_name:
             safe_name = "profile"
-        filename = f"profile-{safe_name}.voicebox.zip"
+        filename = f"profile-{safe_name}.diarix.zip"
 
         return StreamingResponse(
             io.BytesIO(zip_bytes),

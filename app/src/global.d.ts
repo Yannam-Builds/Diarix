@@ -1,5 +1,5 @@
 interface Window {
-  __voiceboxServerStartedByApp?: boolean;
+  __diarixServerStartedByApp?: boolean;
 }
 
 declare module 'virtual:changelog' {

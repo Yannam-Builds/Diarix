@@ -6,21 +6,20 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { AppFrame } from '@/components/AppFrame/AppFrame';
-import { CapturesTab } from '@/components/CapturesTab/CapturesTab';
 import { EffectsTab } from '@/components/EffectsTab/EffectsTab';
+import { HistoryPage } from '@/components/HistoryPage/HistoryPage';
 import { MainEditor } from '@/components/MainEditor/MainEditor';
 import { ModelsTab } from '@/components/ModelsTab/ModelsTab';
 import { AboutPage } from '@/components/ServerTab/AboutPage';
 import { CapturesPage } from '@/components/ServerTab/CapturesPage';
-import { ChangelogPage } from '@/components/ServerTab/ChangelogPage';
 import { GeneralPage } from '@/components/ServerTab/GeneralPage';
 import { GenerationPage } from '@/components/ServerTab/GenerationPage';
 import { GpuPage } from '@/components/ServerTab/GpuPage';
 import { LogsPage } from '@/components/ServerTab/LogsPage';
-import { MCPPage } from '@/components/ServerTab/MCPPage';
 import { SettingsLayout } from '@/components/ServerTab/ServerTab';
 import { Sidebar } from '@/components/Sidebar';
 import { StoriesTab } from '@/components/StoriesTab/StoriesTab';
+import { TranscriptionDashboard } from '@/components/TranscriptionDashboard/TranscriptionDashboard';
 import { Toaster } from '@/components/ui/toaster';
 import { VoicesTab } from '@/components/VoicesTab/VoicesTab';
 import { useGenerationProgress } from '@/lib/hooks/useGenerationProgress';
@@ -92,10 +91,16 @@ const rootRoute = createRootRoute({
   component: RootLayout,
 });
 
-// Index route (main/generate)
+// Index route (transcription-first dashboard)
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
+  component: TranscriptionDashboard,
+});
+
+const voiceStudioRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/voice-studio',
   component: MainEditor,
 });
 
@@ -106,18 +111,18 @@ const storiesRoute = createRoute({
   component: StoriesTab,
 });
 
-// Voices route
-const voicesRoute = createRoute({
+// Profiles route
+const profilesRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/voices',
+  path: '/profiles',
   component: VoicesTab,
 });
 
-// Captures route (prototype — will replace AudioTab once the new flow is ready)
-const capturesRoute = createRoute({
+// Transcript and voice-generation history
+const historyRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/captures',
-  component: CapturesTab,
+  path: '/history',
+  component: HistoryPage,
 });
 
 // Effects route
@@ -160,22 +165,10 @@ const settingsCapturesRoute = createRoute({
   component: CapturesPage,
 });
 
-const settingsMCPRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: '/mcp',
-  component: MCPPage,
-});
-
 const settingsGpuRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: '/gpu',
   component: GpuPage,
-});
-
-const settingsChangelogRoute = createRoute({
-  getParentRoute: () => settingsRoute,
-  path: '/changelog',
-  component: ChangelogPage,
 });
 
 const settingsLogsRoute = createRoute({
@@ -199,25 +192,42 @@ const serverRedirectRoute = createRoute({
   },
 });
 
+const voicesRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/voices',
+  beforeLoad: () => {
+    throw redirect({ to: '/profiles' });
+  },
+});
+
+const capturesRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/captures',
+  beforeLoad: () => {
+    throw redirect({ to: '/history' });
+  },
+});
+
 // Route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  voiceStudioRoute,
   storiesRoute,
-  capturesRoute,
-  voicesRoute,
+  profilesRoute,
+  historyRoute,
   effectsRoute,
   modelsRoute,
   settingsRoute.addChildren([
     settingsGeneralRoute,
     settingsGenerationRoute,
     settingsCapturesRoute,
-    settingsMCPRoute,
     settingsGpuRoute,
     settingsLogsRoute,
-    settingsChangelogRoute,
     settingsAboutRoute,
   ]),
   serverRedirectRoute,
+  voicesRedirectRoute,
+  capturesRedirectRoute,
 ]);
 
 // Create router

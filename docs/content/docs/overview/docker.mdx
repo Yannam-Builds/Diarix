@@ -1,11 +1,11 @@
 ---
 title: "Docker Deployment"
-description: "Run Voicebox as a headless server with a web UI using Docker"
+description: "Run Diarix as a headless server with a web UI using Docker"
 ---
 
 ## Overview
 
-Voicebox can run as a Docker container with a full web UI -- no desktop app required. This is ideal for headless servers, shared GPU machines, or self-hosted deployments.
+Diarix can run as a Docker container with a full web UI -- no desktop app required. This is ideal for headless servers, shared GPU machines, or self-hosted deployments.
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ cd voicebox
 docker compose up
 ```
 
-Open [http://localhost:17493](http://localhost:17493) in your browser. The full Voicebox UI is served directly from the backend.
+Open [http://localhost:17493](http://localhost:17493) in your browser. The full Diarix UI is served directly from the backend.
 
 <Callout type="info">
   The first build takes a few minutes (compiling the frontend, installing Python dependencies). Subsequent starts are fast thanks to Docker layer caching.
@@ -156,7 +156,7 @@ The Docker image follows security best practices:
 
 ### Running Behind a Reverse Proxy
 
-For production deployments, put Voicebox behind nginx or Caddy with TLS and authentication:
+For production deployments, put Diarix behind nginx or Caddy with TLS and authentication:
 
 ```nginx
 server {
@@ -166,7 +166,7 @@ server {
     ssl_certificate /etc/ssl/certs/voicebox.pem;
     ssl_certificate_key /etc/ssl/private/voicebox.key;
 
-    auth_basic "Voicebox";
+    auth_basic "Diarix";
     auth_basic_user_file /etc/nginx/.htpasswd;
 
     location / {

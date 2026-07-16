@@ -52,11 +52,11 @@ export function useExportGeneration() {
         .substring(0, 30)
         .replace(/[^a-z0-9]/gi, '-')
         .toLowerCase();
-      const filename = `generation-${safeText}.voicebox.zip`;
+      const filename = `generation-${safeText}.diarix.zip`;
 
       await platform.filesystem.saveFile(filename, blob, [
         {
-          name: 'Voicebox Generation',
+        name: 'Diarix Generation',
           extensions: ['zip'],
         },
       ]);

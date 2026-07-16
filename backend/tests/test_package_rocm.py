@@ -45,7 +45,7 @@ class TestIsRocmFile:
     @pytest.mark.parametrize(
         "rel_path",
         [
-            "voicebox-server-rocm.exe",
+            "diarix-server-rocm.exe",
             "_internal/python312.dll",
             "_internal/torch/lib/torch_cpu.dll",
             "_internal/torch/lib/c10.dll",
@@ -68,8 +68,8 @@ class TestPackage:
     """End-to-end split of a synthetic onedir into the two archives."""
 
     def test_split_and_manifest(self, tmp_path):
-        onedir = tmp_path / "voicebox-server-rocm"
-        _write(onedir / "voicebox-server-rocm.exe")
+        onedir = tmp_path / "diarix-server-rocm"
+        _write(onedir / "diarix-server-rocm.exe")
         _write(onedir / "_internal" / "python312.dll")
         _write(onedir / "_internal" / "rocm_sdk" / "__init__.py")
         _write(onedir / "_internal" / "torch" / "lib" / "torch_cpu.dll")
@@ -88,11 +88,11 @@ class TestPackage:
         out = tmp_path / "release-assets"
         package_rocm.package(onedir, out, "rocm7.2-v1", ">=2.9.0,<2.10.0")
 
-        server = out / "voicebox-server-rocm.tar.gz"
+        server = out / "diarix-server-rocm.tar.gz"
         libs = out / "rocm-libs-rocm7.2-v1.tar.gz"
         assert server.exists()
         assert libs.exists()
-        assert (out / "voicebox-server-rocm.tar.gz.sha256").exists()
+        assert (out / "diarix-server-rocm.tar.gz.sha256").exists()
         assert (out / "rocm-libs-rocm7.2-v1.tar.gz.sha256").exists()
 
         with tarfile.open(libs) as tar:
@@ -106,15 +106,15 @@ class TestPackage:
             "_internal/_rocm_sdk_libraries_custom/lib/rocblas/library/TensileLibrary.dat"
             in lib_names
         )
-        assert "voicebox-server-rocm.exe" in core_names
+        assert "diarix-server-rocm.exe" in core_names
         assert "_internal/torch/lib/torch_cpu.dll" in core_names
         assert "_internal/rocm_sdk/__init__.py" in core_names
         # Archives must be disjoint.
         assert lib_names.isdisjoint(core_names)
 
     def test_empty_rocm_set_exits(self, tmp_path):
-        onedir = tmp_path / "voicebox-server-rocm"
-        _write(onedir / "voicebox-server-rocm.exe")
+        onedir = tmp_path / "diarix-server-rocm"
+        _write(onedir / "diarix-server-rocm.exe")
         _write(onedir / "_internal" / "torch" / "lib" / "torch_cpu.dll")
 
         with pytest.raises(SystemExit):

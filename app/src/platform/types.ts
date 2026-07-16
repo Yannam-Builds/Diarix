@@ -15,6 +15,7 @@ export interface PlatformFilesystem {
 }
 
 export interface UpdateStatus {
+  channelConfigured?: boolean;
   checking: boolean;
   available: boolean;
   version?: string;

@@ -23,7 +23,7 @@ router = APIRouter(prefix="/cloud", tags=["cloud"])
 
 def _callback_url(request: Request) -> str:
     # Always loopback — the cloud only redirects codes to 127.0.0.1/localhost.
-    port = request.url.port or 17493
+    port = request.url.port or 17494
     return f"http://127.0.0.1:{port}/cloud/callback"
 
 

@@ -35,7 +35,7 @@ fn build_dictate_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewW
         DICTATE_WINDOW_LABEL,
         WebviewUrl::App("?view=dictate".into()),
     )
-    .title("Voicebox Dictate")
+    .title("Diarix Dictate")
     .inner_size(DICTATE_WINDOW_WIDTH, DICTATE_WINDOW_HEIGHT)
     .decorations(false)
     .transparent(true)
@@ -119,16 +119,17 @@ pub fn show_dictate_window(app: &tauri::AppHandle) {
 const LEGACY_PORT: u16 = 8000;
 pub(crate) const SERVER_PORT: u16 = 17493;
 
-/// Find a voicebox-server process listening on a given port (Windows only).
+/// Find a diarix-server process listening on a given port (Windows only).
 ///
 /// Uses PowerShell `Get-NetTCPConnection` to look up the PID owning the port,
-/// then verifies via `tasklist` that it's a voicebox process. The caller is
+/// then verifies via `tasklist` that it's a diarix (or legacy voicebox) process. The caller is
 /// responsible for checking port occupancy first (e.g. `TcpStream::connect_timeout`).
 /// Replaces the previous `netstat -ano` approach which failed on systems with
 /// corrupted system DLLs (see #277).
 #[cfg(windows)]
 fn find_voicebox_pid_on_port(port: u16) -> Option<u32> {
     use std::process::Command;
+    use std::os::windows::process::CommandExt;
 
     // Use PowerShell's Get-NetTCPConnection to find the PID listening on the port.
     // This is a built-in cmdlet that doesn't depend on netstat.exe.
@@ -137,19 +138,23 @@ fn find_voicebox_pid_on_port(port: u16) -> Option<u32> {
         port
     );
     if let Ok(output) = Command::new("powershell")
+        .creation_flags(0x08000000)
         .args(["-NoProfile", "-Command", &ps_script])
         .output()
     {
         let output_str = String::from_utf8_lossy(&output.stdout);
         for line in output_str.lines() {
             if let Ok(pid) = line.trim().parse::<u32>() {
-                // Verify this PID is a voicebox process
+                // Verify this PID is a diarix (or legacy voicebox) process
                 if let Ok(tasklist_output) = Command::new("tasklist")
+                    .creation_flags(0x08000000)
                     .args(["/FI", &format!("PID eq {}", pid), "/FO", "CSV", "/NH"])
                     .output()
                 {
-                    let tasklist_str = String::from_utf8_lossy(&tasklist_output.stdout);
-                    if tasklist_str.to_lowercase().contains("voicebox") {
+                    let tasklist_str = String::from_utf8_lossy(&tasklist_output.stdout).to_lowercase();
+                    // Recognize both the current diarix-server name and the
+                    // legacy voicebox-server name from pre-rename installs.
+                    if tasklist_str.contains("diarix") || tasklist_str.contains("voicebox") {
                         return Some(pid);
                     }
                 }
@@ -238,12 +243,33 @@ fn write_persisted_backend_override(data_dir: &std::path::Path, value: Option<&s
 /// Run `<exe> --version` with a 10-second timeout to avoid hanging Tauri startup.
 /// Returns the last whitespace-delimited token from stdout (e.g. "0.4.4"), or None on any failure.
 async fn probe_binary_version(exe: &std::path::Path, cwd: &std::path::Path) -> Option<String> {
+    let exe_dir = exe.parent().unwrap_or(cwd);
+    let version_path = exe_dir.join("version.txt");
+    let _ = std::fs::remove_file(&version_path);
+
     let mut cmd = tokio::process::Command::new(exe);
     cmd.arg("--version")
         .current_dir(cwd)
         .kill_on_drop(true);
 
-    match tokio::time::timeout(std::time::Duration::from_secs(10), cmd.output()).await {
+    #[cfg(windows)]
+    {
+        cmd.creation_flags(0x08000000);
+    }
+
+    let run_result = tokio::time::timeout(std::time::Duration::from_secs(10), cmd.output()).await;
+
+    if version_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&version_path) {
+            let _ = std::fs::remove_file(&version_path);
+            let version = content.trim().split_whitespace().last().map(String::from);
+            if version.is_some() {
+                return version;
+            }
+        }
+    }
+
+    match run_result {
         Ok(Ok(output)) => {
             let s = String::from_utf8_lossy(&output.stdout);
             s.trim().split_whitespace().last().map(String::from)
@@ -279,7 +305,7 @@ async fn start_server(
         return Ok(format!("http://127.0.0.1:{}", SERVER_PORT));
     }
 
-    // Check if a voicebox server is already running on our port (from previous session with keep_running=true,
+    // Check if a diarix server is already running on our port (from previous session with keep_running=true,
     // or an externally started server e.g. via `python`, `uvicorn`, Docker, etc.)
     #[cfg(unix)]
     {
@@ -294,25 +320,25 @@ async fn start_server(
                 if parts.len() >= 2 {
                     let command = parts[0];
                     let pid_str = parts[1];
-                    if command.contains("voicebox") {
+                    if command.contains("diarix") || command.contains("voicebox") {
                         if let Ok(pid) = pid_str.parse::<u32>() {
-                            println!("Found existing voicebox-server on port {} (PID: {}), reusing it", SERVER_PORT, pid);
+                            println!("Found existing diarix-server on port {} (PID: {}), reusing it", SERVER_PORT, pid);
                             // Store the PID so we can kill it on exit if needed
                             *state.server_pid.lock().unwrap() = Some(pid);
                             return Ok(format!("http://127.0.0.1:{}", SERVER_PORT));
                         }
                     } else {
-                        // Process name doesn't contain "voicebox" — could be an external
+                        // Process name doesn't match — could be an external
                         // Python/uvicorn/Docker server. Verify via HTTP health check.
-                        println!("Port {} in use by '{}' (PID: {}), checking if it's a Voicebox server...", SERVER_PORT, command, pid_str);
+                        println!("Port {} in use by '{}' (PID: {}), checking if it's a Diarix server...", SERVER_PORT, command, pid_str);
                         if check_health(SERVER_PORT) {
                             println!("Health check passed — reusing external server on port {}", SERVER_PORT);
                             return Ok(format!("http://127.0.0.1:{}", SERVER_PORT));
                         }
-                        println!("Health check failed — port is occupied by a non-Voicebox process");
+                        println!("Health check failed — port is occupied by a non-Diarix process");
                         return Err(format!(
                             "Port {} is already in use by another application ({}). \
-                             Close it or change the Voicebox server port.",
+                             Close it or change the Diarix server port.",
                             SERVER_PORT, command
                         ));
                     }
@@ -328,28 +354,28 @@ async fn start_server(
             &format!("127.0.0.1:{}", SERVER_PORT).parse().unwrap(),
             std::time::Duration::from_secs(1),
         ).is_ok() {
-            // Port is in use — check if it's a voicebox process by name first
+            // Port is in use — check if it's a diarix process by name first
             if let Some(pid) = find_voicebox_pid_on_port(SERVER_PORT) {
-                println!("Found existing voicebox-server on port {} (PID: {}), reusing it", SERVER_PORT, pid);
+                println!("Found existing diarix-server on port {} (PID: {}), reusing it", SERVER_PORT, pid);
                 *state.server_pid.lock().unwrap() = Some(pid);
                 return Ok(format!("http://127.0.0.1:{}", SERVER_PORT));
             }
             // Process name doesn't match — could be an external Python/Docker server.
             // Verify via HTTP health check before giving up.
-            println!("Port {} in use by unknown process, checking if it's a Voicebox server...", SERVER_PORT);
+            println!("Port {} in use by unknown process, checking if it's a Diarix server...", SERVER_PORT);
             if check_health(SERVER_PORT) {
                 println!("Health check passed — reusing external server on port {}", SERVER_PORT);
                 return Ok(format!("http://127.0.0.1:{}", SERVER_PORT));
             }
             return Err(format!(
                 "Port {} is already in use by another application. \
-                 Close the other application or change the Voicebox port.",
+                 Close the other application or change the Diarix port.",
                 SERVER_PORT
             ));
         }
     }
 
-    // Kill any orphaned voicebox-server from previous session on legacy port 8000
+    // Kill any orphaned diarix-server from previous session on legacy port 8000
     // This handles upgrades from older versions that used a fixed port
     #[cfg(unix)]
     {
@@ -365,9 +391,9 @@ async fn start_server(
                     let command = parts[0];
                     let pid_str = parts[1];
                     
-                    if command.contains("voicebox") {
+                    if command.contains("diarix") || command.contains("voicebox") {
                         if let Ok(pid) = pid_str.parse::<i32>() {
-                            println!("Found orphaned voicebox-server on legacy port {} (PID: {}, CMD: {}), killing it...", LEGACY_PORT, pid, command);
+                            println!("Found orphaned diarix-server on legacy port {} (PID: {}, CMD: {}), killing it...", LEGACY_PORT, pid, command);
                             let _ = Command::new("kill")
                                 .args(["-9", "--", &format!("-{}", pid)])
                                 .output();
@@ -376,7 +402,7 @@ async fn start_server(
                                 .output();
                         }
                     } else {
-                        println!("Legacy port {} is in use by non-voicebox process: {} (PID: {}), not killing", LEGACY_PORT, command, pid_str);
+                        println!("Legacy port {} is in use by non-diarix process: {} (PID: {}), not killing", LEGACY_PORT, command, pid_str);
                     }
                 }
             }
@@ -386,13 +412,15 @@ async fn start_server(
     #[cfg(windows)]
     {
         use std::net::TcpStream;
+        use std::os::windows::process::CommandExt;
         if TcpStream::connect_timeout(
             &format!("127.0.0.1:{}", LEGACY_PORT).parse().unwrap(),
             std::time::Duration::from_secs(1),
         ).is_ok() {
             if let Some(pid) = find_voicebox_pid_on_port(LEGACY_PORT) {
-                println!("Found orphaned voicebox-server on legacy port {} (PID: {}), killing it...", LEGACY_PORT, pid);
+                println!("Found orphaned diarix-server on legacy port {} (PID: {}), killing it...", LEGACY_PORT, pid);
                 let _ = std::process::Command::new("taskkill")
+                    .creation_flags(0x08000000)
                     .args(["/PID", &pid.to_string(), "/T", "/F"])
                     .output();
             }
@@ -412,20 +440,34 @@ async fn start_server(
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data dir: {}", e))?;
 
+    // Portable Windows builds keep optional backends and offline starter
+    // models beside Diarix.exe. Tauri's resource directory differs between
+    // bundled and portable layouts, so retain the executable's parent as a
+    // second, deterministic lookup location.
+    let adjacent_app_dir = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(std::path::Path::to_path_buf));
+
     println!("=================================================================");
-    println!("Starting voicebox-server sidecar");
+    println!("Starting diarix-server sidecar");
     println!("Data directory: {:?}", data_dir);
     println!("Remote mode: {}", remote.unwrap_or(false));
 
     // Check for ROCm backend in data directory (onedir layout: backends/rocm/)
+    // The legacy voicebox-server-rocm name is still probed so a backends dir
+    // downloaded before the rename keeps working.
     let rocm_binary = {
         let rocm_dir = data_dir.join("backends").join("rocm");
-        let rocm_name = if cfg!(windows) {
-            "voicebox-server-rocm.exe"
+        let rocm_names: [&str; 2] = if cfg!(windows) {
+            ["diarix-server-rocm.exe", "voicebox-server-rocm.exe"]
         } else {
-            "voicebox-server-rocm"
+            ["diarix-server-rocm", "voicebox-server-rocm"]
         };
-        let exe_path = rocm_dir.join(rocm_name);
+        let exe_path = rocm_names
+            .iter()
+            .map(|name| rocm_dir.join(name))
+            .find(|path| path.exists())
+            .unwrap_or_else(|| rocm_dir.join(rocm_names[0]));
         if exe_path.exists() {
             println!("Found ROCm backend at {:?}", rocm_dir);
 
@@ -456,16 +498,36 @@ async fn start_server(
         }
     };
 
-    // Check for CUDA backend in data directory (onedir layout: backends/cuda/)
+    // Prefer an updated CUDA backend in app data, then fall back to the CUDA
+    // runtime bundled with Diarix. Both use the same PyInstaller onedir layout.
+    // The legacy voicebox-server-cuda name is still probed so a backends dir
+    // built before the rename keeps working.
     let cuda_binary = {
-        let cuda_dir = data_dir.join("backends").join("cuda");
-        let cuda_name = if cfg!(windows) {
-            "voicebox-server-cuda.exe"
+        let cuda_names: [&str; 2] = if cfg!(windows) {
+            ["diarix-server-cuda.exe", "voicebox-server-cuda.exe"]
         } else {
-            "voicebox-server-cuda"
+            ["diarix-server-cuda", "voicebox-server-cuda"]
         };
-        let exe_path = cuda_dir.join(cuda_name);
-        if exe_path.exists() {
+
+        let downloaded_dir = data_dir.join("backends").join("cuda");
+        let bundled_dirs = app
+            .path()
+            .resource_dir()
+            .ok()
+            .into_iter()
+            .chain(adjacent_app_dir.clone())
+            .map(|dir| dir.join("backends").join("cuda"));
+        let found = std::iter::once(downloaded_dir)
+            .chain(bundled_dirs)
+            .find_map(|dir| {
+                cuda_names
+                    .iter()
+                    .map(|name| dir.join(name))
+                    .find(|path| path.exists())
+                    .map(|path| (dir, path))
+            });
+
+        if let Some((cuda_dir, exe_path)) = found {
             println!("Found CUDA backend at {:?}", cuda_dir);
 
             // Version check: run --version from the onedir directory so
@@ -492,12 +554,12 @@ async fn start_server(
                 None
             }
         } else {
-            println!("No CUDA backend found, using bundled CPU binary");
+            println!("No CUDA backend found, using CPU fallback");
             None
         }
     };
 
-    let sidecar_result = app.shell().sidecar("voicebox-server");
+    let sidecar_result = app.shell().sidecar("diarix-server");
 
     let mut sidecar = match sidecar_result {
         Ok(s) => s,
@@ -544,8 +606,21 @@ async fn start_server(
     let parent_pid_str = std::process::id().to_string();
     let is_remote = remote.unwrap_or(false);
 
-    // Resolve the custom models directory from the parameter or stored state
-    let effective_models_dir = models_dir.or_else(|| state.models_dir.lock().unwrap().clone());
+    // Resolve an explicit/custom model directory first. Offline distributions
+    // can place a starter Hugging Face cache beside the app at
+    // models/huggingface/hub; use it automatically when no custom path exists.
+    let bundled_models_dir = app
+        .path()
+        .resource_dir()
+        .ok()
+        .into_iter()
+        .chain(adjacent_app_dir)
+        .map(|dir| dir.join("models").join("huggingface").join("hub"))
+        .find(|dir| dir.exists())
+        .and_then(|dir| dir.to_str().map(str::to_owned));
+    let effective_models_dir = models_dir
+        .or_else(|| state.models_dir.lock().unwrap().clone())
+        .or(bundled_models_dir);
     if let Some(ref dir) = effective_models_dir {
         println!("Custom models directory: {}", dir);
     }
@@ -782,7 +857,7 @@ async fn start_server(
                 {
                     eprintln!("Server process ended unexpectedly during startup!");
                     eprintln!("The server binary may have crashed or exited with an error.");
-                    eprintln!("Check Console.app logs for more details (search for 'voicebox')");
+                    eprintln!("Check Console.app logs for more details (search for 'diarix')");
                     return Err("Server process ended unexpectedly".to_string());
                 }
             }
@@ -963,20 +1038,21 @@ fn stop_audio_playback(
     state.stop_all_playback()
 }
 
-/// Identifier of the Voicebox app itself — used to short-circuit auto-paste
+/// Identifier of the Diarix app itself — used to short-circuit auto-paste
 /// when the user fires a chord while focus was inside one of our own
-/// windows. Paste into Voicebox-internal targets is step 6 territory and
+/// windows. Paste into Diarix-internal targets is step 6 territory and
 /// goes through a different (JS-side) injection path.
 ///
 /// Value matches what `focus_capture::capture_focus` writes into
 /// `FocusSnapshot::bundle_id` on the current platform — reverse-DNS bundle
-/// id on macOS, lowercased exe basename on Windows/Linux.
+/// id on macOS, lowercased exe basename on Windows/Linux. These must track
+/// tauri.conf.json's identifier and the Cargo binary name (`diarix`).
 #[cfg(target_os = "macos")]
-const VOICEBOX_BUNDLE_ID: &str = "sh.voicebox.app";
+const APP_BUNDLE_ID: &str = "com.diarix.app";
 #[cfg(target_os = "windows")]
-const VOICEBOX_BUNDLE_ID: &str = "voicebox.exe";
+const APP_BUNDLE_ID: &str = "diarix.exe";
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-const VOICEBOX_BUNDLE_ID: &str = "voicebox";
+const APP_BUNDLE_ID: &str = "diarix";
 
 /// Milliseconds to wait between activating the target app and firing the
 /// synthetic ⌘V, giving AppKit time to finish re-ordering windows and
@@ -1213,12 +1289,12 @@ async fn paste_final_text(
     text: String,
     focus: focus_capture::FocusSnapshot,
 ) -> Result<bool, String> {
-    if focus.bundle_id.as_deref() == Some(VOICEBOX_BUNDLE_ID) {
+    if focus.bundle_id.as_deref() == Some(APP_BUNDLE_ID) {
         return Ok(false);
     }
     if !accessibility::is_trusted() {
         return Err(
-            "Accessibility permission required for auto-paste. Open System Settings → Privacy & Security → Accessibility and enable Voicebox."
+            "Accessibility permission required for auto-paste. Open System Settings → Privacy & Security → Accessibility and enable Diarix."
                 .into(),
         );
     }
@@ -1269,7 +1345,7 @@ async fn debug_focus_roundtrip(
 ) -> Result<serde_json::Value, String> {
     if !accessibility::is_trusted() {
         return Err(
-            "Accessibility permission not granted. Open System Settings → Privacy & Security → Accessibility and enable Voicebox."
+            "Accessibility permission not granted. Open System Settings → Privacy & Security → Accessibility and enable Diarix."
                 .into(),
         );
     }
@@ -1316,7 +1392,7 @@ async fn debug_paste_text(
 ) -> Result<serde_json::Value, String> {
     if !accessibility::is_trusted() {
         return Err(
-            "Accessibility permission not granted. Open System Settings → Privacy & Security → Accessibility and enable Voicebox, then try again."
+            "Accessibility permission not granted. Open System Settings → Privacy & Security → Accessibility and enable Diarix, then try again."
                 .into(),
         );
     }

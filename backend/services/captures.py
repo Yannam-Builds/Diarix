@@ -7,31 +7,27 @@ uploaded file). Storage mirrors the generations flow: audio lives under
 ``data/captures/<id>.wav`` and rows live in the ``captures`` table.
 """
 
-import contextlib
 import json
 import logging
+import shutil
 import uuid
 from pathlib import Path
 from typing import Optional
 
-import soundfile as sf
 from sqlalchemy.orm import Session
 
 from .. import config
+from ..backends import resolve_stt_config
 from ..database import Capture as DBCapture
 from ..models import CaptureResponse, RefinementFlagsModel
-from ..utils.audio import load_audio
 from .refinement import RefinementFlags, refine_transcript
-from .transcribe import get_whisper_model
+from . import transcribe
+from .media_ingestion import ingest_media, sanitize_upload_filename
 
 logger = logging.getLogger(__name__)
 
 
 VALID_SOURCES = {"dictation", "recording", "file"}
-# Suffixes whisper's miniaudio loader can read directly. Anything outside
-# this set has to go through librosa for decode + a soundfile transcode
-# before whisper sees it.
-WHISPER_NATIVE_FORMATS = (".wav", ".mp3", ".flac", ".ogg")
 
 
 def _to_response(row: DBCapture) -> CaptureResponse:
@@ -71,59 +67,26 @@ async def create_capture(
         raise ValueError(f"Invalid source '{source}'. Must be one of {sorted(VALID_SOURCES)}")
 
     capture_id = str(uuid.uuid4())
-    suffix = Path(filename).suffix.lower() or ".wav"
-    if suffix not in (".wav", ".mp3", ".m4a", ".flac", ".ogg", ".webm"):
-        suffix = ".wav"
-
-    raw_path = config.get_captures_dir() / f"{capture_id}{suffix}"
+    safe_name = sanitize_upload_filename(filename, "capture.media")[:180]
+    raw_path = config.get_captures_dir() / f"{capture_id}__{safe_name}"
     written_files: list[Path] = []
 
     try:
         raw_path.write_bytes(audio_bytes)
         written_files.append(raw_path)
 
-        # Decode once with librosa — its audioread fallback handles webm/opus
-        # via ffmpeg, which miniaudio (used inside mlx-audio's whisper) can't.
-        # The decoded array gives us an accurate duration and becomes the
-        # canonical WAV we hand to whisper.
-        try:
-            audio, sr = load_audio(str(raw_path))
-            duration_ms = int((len(audio) / sr) * 1000) if sr else None
-        except Exception as decode_err:
-            logger.warning(
-                "Could not decode capture %s (%s): %r", capture_id, suffix, decode_err
+        model_config = resolve_stt_config(stt_model)
+        async with ingest_media(raw_path, model_config.audio_input) as media:
+            duration_ms = (
+                max(0, round(media.duration * 1000)) if media.duration is not None else None
             )
-            audio, sr = None, None
-            duration_ms = None
-
-        if audio is None or sr is None:
-            # Decode failed. Only pass the file straight to whisper if the
-            # source is a format its miniaudio loader can still read — webm,
-            # m4a, etc. would just 500 later. Surface a clean error instead.
-            if suffix not in WHISPER_NATIVE_FORMATS:
-                raise ValueError(
-                    f"Could not decode {suffix} audio — the recording may be empty or corrupt"
-                )
-            audio_path = raw_path
-        elif suffix == ".wav":
-            audio_path = raw_path
-        else:
-            # Transcode to WAV so downstream loaders (miniaudio, soundfile) work
-            # regardless of what format the client shipped.
-            audio_path = config.get_captures_dir() / f"{capture_id}.wav"
-            sf.write(str(audio_path), audio, sr, format="WAV")
-            written_files.append(audio_path)
-            with contextlib.suppress(OSError):
-                raw_path.unlink()
-                written_files.remove(raw_path)
-
-        whisper = get_whisper_model()
-        resolved_stt = stt_model or whisper.model_size
-        transcript = await whisper.transcribe(str(audio_path), language, resolved_stt)
+            transcript, resolved_stt = await transcribe.transcribe_audio(
+                str(media.audio_path), model_config.model_name, language
+            )
 
         row = DBCapture(
             id=capture_id,
-            audio_path=config.to_storage_path(audio_path),
+            audio_path=config.to_storage_path(raw_path),
             source=source,
             language=language,
             duration_ms=duration_ms,
@@ -147,11 +110,24 @@ async def create_capture(
     return _to_response(row)
 
 
-def list_captures(db: Session, limit: int = 50, offset: int = 0) -> tuple[list[CaptureResponse], int]:
-    total = db.query(DBCapture).count()
+def list_captures(
+    db: Session, limit: int = 50, offset: int = 0, search: str | None = None
+) -> tuple[list[CaptureResponse], int]:
+    query = db.query(DBCapture)
+    if search and search.strip():
+        # Case-insensitive substring match over both transcript columns.
+        # SQLite LIKE is already case-insensitive for ASCII; ilike() keeps
+        # the intent explicit and portable. Escape LIKE wildcards so a
+        # user searching for "100%" matches literally.
+        term = search.strip().replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        pattern = f"%{term}%"
+        query = query.filter(
+            DBCapture.transcript_raw.ilike(pattern, escape="\\")
+            | DBCapture.transcript_refined.ilike(pattern, escape="\\")
+        )
+    total = query.count()
     rows = (
-        db.query(DBCapture)
-        .order_by(DBCapture.created_at.desc())
+        query.order_by(DBCapture.created_at.desc())
         .limit(limit)
         .offset(offset)
         .all()
@@ -219,9 +195,13 @@ async def retranscribe_capture(
     if not resolved or not resolved.exists():
         raise FileNotFoundError(f"Audio for capture {capture_id} is missing")
 
-    whisper = get_whisper_model()
-    resolved_stt = stt_model or whisper.model_size
-    transcript = await whisper.transcribe(str(resolved), language, resolved_stt)
+    model_config = resolve_stt_config(stt_model or row.stt_model)
+    async with ingest_media(resolved, model_config.audio_input) as media:
+        transcript, resolved_stt = await transcribe.transcribe_audio(
+            str(media.audio_path), model_config.model_name, language
+        )
+        if media.duration is not None:
+            row.duration_ms = max(0, round(media.duration * 1000))
 
     row.transcript_raw = transcript
     row.stt_model = resolved_stt
@@ -234,3 +214,47 @@ async def retranscribe_capture(
     db.commit()
     db.refresh(row)
     return _to_response(row)
+
+
+def persist_completed_transcription(
+    *,
+    source_path: str | Path,
+    filename: str,
+    language: Optional[str],
+    duration: float,
+    transcript: str,
+    stt_model: str,
+) -> str:
+    """Retain uploaded media and surface a completed job in capture history."""
+    # Import the session module, not the package-level SessionLocal re-export.
+    # The re-export is bound to None when the database package is first imported,
+    # before init_db() installs the real session factory.
+    from ..database import session as database_session
+
+    capture_id = str(uuid.uuid4())
+    safe_name = sanitize_upload_filename(filename)[:180]
+    retained_path = config.get_captures_dir() / f"{capture_id}__{safe_name}"
+    session_factory = database_session.SessionLocal
+    if session_factory is None:
+        raise RuntimeError("Database session factory is not initialized.")
+    db = session_factory()
+    try:
+        shutil.copy2(Path(source_path), retained_path)
+        row = DBCapture(
+            id=capture_id,
+            audio_path=config.to_storage_path(retained_path),
+            source="file",
+            language=None if language == "auto" else language,
+            duration_ms=max(0, round(duration * 1000)),
+            transcript_raw=transcript,
+            stt_model=stt_model,
+        )
+        db.add(row)
+        db.commit()
+        return capture_id
+    except Exception:
+        db.rollback()
+        retained_path.unlink(missing_ok=True)
+        raise
+    finally:
+        db.close()

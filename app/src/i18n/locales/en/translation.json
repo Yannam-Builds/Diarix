@@ -12,6 +12,11 @@
     "unknownError": "Unknown error"
   },
   "nav": {
+    "transcribe": "Transcribe",
+    "voiceStudio": "Voice Studio",
+    "profiles": "Profiles",
+    "history": "History",
+    "mcp": "MCP",
     "generate": "Generate",
     "stories": "Stories",
     "captures": "Captures",
@@ -63,7 +68,10 @@
       "playAsGenerating": "Generating…",
       "playAsStop": "Stop · {{name}}",
       "playAsStopFallback": "Stop · Voice",
-      "playAsDropdownLabel": "Play transcript as"
+      "playAsDropdownLabel": "Play transcript as",
+      "retranscribe": "Re-transcribe",
+      "retranscribing": "Re-transcribing…",
+      "retranscribeDropdownLabel": "Re-transcribe with model"
     },
     "empty": {
       "noMatches": "No captures match \"{{query}}\"",
@@ -91,6 +99,9 @@
       "exportSuccess": "Exported to {{path}}",
       "exportFailed": "Export failed",
       "exportEmpty": "Nothing to export",
+      "retranscribed": "Re-transcribed",
+      "retranscribedDetail": "Transcript replaced using {{model}}.",
+      "retranscribeFailed": "Re-transcribe failed",
       "shortcutNotArmed": "Shortcut on, but not yet armed",
       "shortcutNotArmedDescription_one": "{{names}} still needs to download. Open the Captures tab to start.",
       "shortcutNotArmedDescription_other": "{{names}} still need to download. Open the Captures tab to start."
@@ -135,13 +146,13 @@
       },
       "inputMonitoring": {
         "label": "Input Monitoring permission",
-        "ready": "macOS allows Voicebox to detect your global shortcut.",
-        "missing": "macOS needs to allow Voicebox to detect the global shortcut.",
+        "ready": "macOS allows Diarix to detect your global shortcut.",
+        "missing": "macOS needs to allow Diarix to detect the global shortcut.",
         "openSettings": "Open Settings"
       },
       "accessibility": {
         "label": "Accessibility permission",
-        "ready": "Voicebox can paste transcriptions into other apps.",
+        "ready": "Diarix can paste transcriptions into other apps.",
         "missing": "Required so transcriptions can paste into the focused app.",
         "openSettings": "Open Settings"
       }
@@ -149,19 +160,19 @@
     "permissions": {
       "accessibility": {
         "title": "Grant Accessibility permission to enable auto-paste",
-        "body": "Voicebox needs <path>System Settings → Privacy & Security → Accessibility</path> to paste transcriptions into other apps. Your dictation still lands in the Captures tab without it.",
+        "body": "Diarix needs <path>System Settings → Privacy & Security → Accessibility</path> to paste transcriptions into other apps. Your dictation still lands in the Captures tab without it.",
         "openSettings": "Open Settings",
         "recheck": "I've enabled it",
         "rechecking": "Checking…",
-        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Voicebox after toggling the permission."
+        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Diarix after toggling the permission."
       },
       "inputMonitoring": {
         "title": "Grant Input Monitoring to enable the global shortcut",
-        "body": "Voicebox needs <path>System Settings → Privacy & Security → Input Monitoring</path> to detect your dictation chord. The toggle is on, but macOS is blocking key events until you allow it.",
+        "body": "Diarix needs <path>System Settings → Privacy & Security → Input Monitoring</path> to detect your dictation chord. The toggle is on, but macOS is blocking key events until you allow it.",
         "openSettings": "Open Settings",
         "recheck": "I've enabled it",
         "rechecking": "Checking…",
-        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Voicebox after toggling the permission."
+        "stillMissing": "Still not detected. macOS usually requires quitting and reopening Diarix after toggling the permission."
       }
     }
   },
@@ -725,7 +736,7 @@
     "createVoice": "Create Voice",
     "import": {
       "invalidTitle": "Invalid file type",
-      "invalidDescription": "Please select a valid .voicebox.zip file",
+      "invalidDescription": "Please select a valid .diarix.zip file",
       "successTitle": "Profile imported",
       "successDescription": "Voice profile imported successfully",
       "failedTitle": "Failed to import profile",
@@ -748,7 +759,7 @@
     },
     "language": {
       "label": "Language",
-      "description": "Choose the display language for Voicebox."
+      "description": "Choose the display language for Diarix."
     },
     "theme": {
       "label": "Theme",
@@ -769,7 +780,7 @@
       },
       "serverUrl": {
         "title": "Server URL",
-        "description": "The address of your voicebox backend server.",
+        "description": "The address of your Diarix backend server.",
         "invalidUrl": "Please enter a valid URL",
         "updatedTitle": "Server URL updated",
         "updatedDescription": "Connected to {{url}}"
@@ -824,7 +835,7 @@
       },
       "api": {
         "title": "API Access",
-        "description": "Integrate Voicebox into your workflow via the REST API at <code>{{url}}</code>",
+        "description": "Integrate Diarix into your workflow via the REST API at <code>{{url}}</code>",
         "viewReference": "View the full API reference",
         "endpoints": {
           "generate": "Generate speech",
@@ -913,7 +924,7 @@
         },
         "autoPaste": {
           "title": "Auto-paste into focused text field",
-          "description": "If a text input is focused in another app, paste directly into it. Voicebox saves and restores whatever was on your clipboard."
+          "description": "If a text input is focused in another app, paste directly into it. Diarix saves and restores whatever was on your clipboard."
         }
       },
       "transcription": {
@@ -921,7 +932,7 @@
         "description": "Pick which speech-to-text model runs on your captures.",
         "model": {
           "title": "Transcription model",
-          "description": "Whisper ships with Voicebox and runs entirely on your machine.",
+          "description": "Whisper ships with Diarix and runs entirely on your machine.",
           "base": "Whisper Base · 74M · {{tail}}",
           "small": "Whisper Small · 244M · {{tail}}",
           "medium": "Whisper Medium · 769M · {{tail}}",
@@ -982,6 +993,11 @@
         "preserveTechnical": {
           "title": "Preserve technical terms",
           "description": "Keep code identifiers, command names, and acronyms exactly as spoken. Turn on when you dictate into a code prompt."
+        },
+        "customInstructions": {
+          "title": "Custom instructions",
+          "description": "Optional preferences for how transcripts are cleaned up — formatting, tone of punctuation, list style. Applied to the transcript text only; the refiner still never answers or acts on what you said.",
+          "placeholder": "e.g. Keep sentences short. Use bullet points for lists. Spell numbers as digits."
         }
       },
       "playback": {
@@ -997,7 +1013,7 @@
       },
       "storage": {
         "title": "Storage",
-        "description": "Captures are saved as paired audio and transcript files in your Voicebox data directory.",
+        "description": "Captures are saved as paired audio and transcript files in your Diarix data directory.",
         "retention": {
           "title": "Retention",
           "description": "How long to keep captures. Applies to both audio and transcripts.",
@@ -1014,7 +1030,7 @@
       },
       "sidebar": {
         "aboutTitle": "About Captures",
-        "aboutBody": "Hold a shortcut anywhere on your machine, speak, and Voicebox turns your voice into text. Replay it in any cloned voice, paste it into any app, or pipe it into your coding agent.",
+        "aboutBody": "Hold a shortcut anywhere on your machine, speak, and Diarix turns your voice into text. Replay it in any cloned voice, paste it into any app, or pipe it into your coding agent.",
         "differencesTitle": "What's different",
         "local": {
           "title": "Fully local.",
@@ -1030,14 +1046,14 @@
         },
         "windowsCaveat": {
           "title": "Heads-up on Windows",
-          "body": "The shortcut won't fire while Voicebox itself or any app running as administrator is focused. Working on it."
+          "body": "The shortcut won't fire while Diarix itself or any app running as administrator is focused. Working on it."
         }
       }
     },
     "mcp": {
       "install": {
         "title": "Install into your agent",
-        "description": "Voicebox exposes a local MCP server whenever the app is open. Paste one of these snippets into your agent's MCP config.",
+        "description": "Diarix exposes a local MCP server whenever the app is open. Paste one of these snippets into your agent's MCP config.",
         "http": {
           "title": "HTTP (recommended)",
           "description": "For clients that speak HTTP MCP — Claude Code, Cursor, Windsurf, VS Code."
@@ -1078,7 +1094,7 @@
       },
       "sidebar": {
         "aboutTitle": "About MCP",
-        "aboutBody": "Model Context Protocol lets your AI coding agent — Claude Code, Cursor, Windsurf — call Voicebox tools. Speak in a cloned voice, transcribe audio, browse captures.",
+        "aboutBody": "Model Context Protocol lets your AI coding agent — Claude Code, Cursor, Windsurf — call Diarix tools. Speak in a cloned voice, transcribe audio, browse captures.",
         "toolsTitle": "Available tools",
         "tools": {
           "speak": "Speak text in a voice profile.",
@@ -1137,7 +1153,7 @@
         "deleteCuda": "Failed to delete CUDA backend",
         "deleteRocm": "Failed to delete ROCm backend"
       },
-      "footer": "Voicebox automatically detects and uses the best available GPU on your system. On Apple Silicon Macs, the MLX backend runs natively on the Neural Engine and GPU via Metal Performance Shaders (MPS), with no additional setup required. On Windows, you can download optional CUDA (NVIDIA) or ROCm (AMD) backends for hardware-accelerated inference. Intel XPU and DirectML are also supported where available through PyTorch. When no GPU is detected, Voicebox falls back to CPU — all engines still work, just slower.",
+      "footer": "Diarix automatically detects and uses the best available GPU on your system. On Apple Silicon Macs, the MLX backend runs natively on the Neural Engine and GPU via Metal Performance Shaders (MPS), with no additional setup required. On Windows, you can download optional CUDA (NVIDIA) or ROCm (AMD) backends for hardware-accelerated inference. Intel XPU and DirectML are also supported where available through PyTorch. When no GPU is detected, Diarix falls back to CPU — all engines still work, just slower.",
       "rocm": {
         "title": "AMD ROCm Backend",
         "activeTitle": "ROCm Backend Active",
@@ -1188,6 +1204,7 @@
     "subtitle": "Download and manage AI models for voice generation and transcription",
     "defaultName": "Model",
     "unknownSize": "Unknown size",
+    "sharesCacheWith": "Shares downloaded files with {{names}}",
     "sections": {
       "voiceGeneration": "Voice Generation",
       "transcription": "Transcription",

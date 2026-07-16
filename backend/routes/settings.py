@@ -34,3 +34,16 @@ async def update_generation_settings_endpoint(
     db: Session = Depends(get_db),
 ):
     return settings_service.update_generation_settings(db, patch.model_dump(exclude_unset=True))
+
+
+@router.get("/resources", response_model=models.ResourceSettingsResponse)
+async def get_resource_settings_endpoint(db: Session = Depends(get_db)):
+    return settings_service.get_resource_settings(db)
+
+
+@router.put("/resources", response_model=models.ResourceSettingsResponse)
+async def update_resource_settings_endpoint(
+    patch: models.ResourceSettingsUpdate,
+    db: Session = Depends(get_db),
+):
+    return settings_service.update_resource_settings(db, patch.model_dump(exclude_unset=True))

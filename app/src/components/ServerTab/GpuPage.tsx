@@ -3,6 +3,7 @@ import { AlertCircle, Cpu, Download, Loader2, RotateCw, Trash2 } from 'lucide-re
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { apiClient } from '@/lib/api/client';
 import type { CudaDownloadProgress, RocmDownloadProgress, HealthResponse } from '@/lib/api/types';
@@ -118,6 +119,7 @@ export function GpuPage() {
 
   const [restartPhase, setRestartPhase] = useState<RestartPhase>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [resourceSaving, setResourceSaving] = useState(false);
   const [cudaStreaming, setCudaStreaming] = useState(false);
   const [rocmStreaming, setRocmStreaming] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<CudaDownloadProgress | null>(null);
@@ -142,6 +144,25 @@ export function GpuPage() {
     retry: 1,
     enabled: !!health,
   });
+
+  const { data: resourceSettings } = useQuery({
+    queryKey: ['resource-settings', serverUrl],
+    queryFn: () => apiClient.getResourceSettings(),
+    enabled: !!health,
+  });
+
+  const handleResourceGuardChange = async (enabled: boolean) => {
+    setResourceSaving(true);
+    setError(null);
+    try {
+      const updated = await apiClient.updateResourceSettings({ limits_enabled: enabled });
+      queryClient.setQueryData(['resource-settings', serverUrl], updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update inference resource limits');
+    } finally {
+      setResourceSaving(false);
+    }
+  };
 
   const {
     data: rocmStatus,
@@ -402,6 +423,25 @@ export function GpuPage() {
   return (
     <div className="space-y-8 max-w-2xl">
       <GpuInfoCard health={health} />
+
+      <SettingSection
+        title="Inference resource guard"
+        description="Keeps transcription, voice, and refinement workloads responsive without lowering the desktop app's priority."
+      >
+        <SettingRow
+          title="Limit inference to 80%"
+          description="Uses up to 80% of logical CPU cores and 80% of PyTorch GPU memory. Turn this off for unrestricted inference."
+          htmlFor="resource-guard"
+          action={
+            <Checkbox
+              id="resource-guard"
+              checked={resourceSettings?.limits_enabled ?? true}
+              disabled={!resourceSettings || resourceSaving}
+              onCheckedChange={handleResourceGuardChange}
+            />
+          }
+        />
+      </SettingSection>
 
       {!hasNativeGpu && !isCurrentlyCuda && !isCurrentlyRocm && (
         <>

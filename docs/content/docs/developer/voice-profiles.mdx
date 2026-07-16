@@ -1,11 +1,11 @@
 ---
 title: "Voice Profiles"
-description: "How voice profile management works in Voicebox"
+description: "How voice profile management works in Diarix"
 ---
 
 ## Overview
 
-Voice profiles are the unit of "a saved voice" in Voicebox. As of 0.4 they support two flavors backed by the same `profiles` table:
+Voice profiles are the unit of "a saved voice" in Diarix. As of 0.4 they support two flavors backed by the same `profiles` table:
 
 - **Cloned profiles** — store one or more reference audio samples; the cloning engine generates a voice embedding at use time
 - **Preset profiles** — store no audio; just a pointer to an engine-specific pre-built voice (e.g. Kokoro's `am_adam`, Qwen CustomVoice's `Ryan`)

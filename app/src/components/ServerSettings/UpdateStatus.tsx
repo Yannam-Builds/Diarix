@@ -34,7 +34,7 @@ export function UpdateStatus() {
               {isDev ? ' (dev)' : ''}
             </div>
           </div>
-          {!isDev && (
+          {!isDev && status.channelConfigured !== false && (
             <Button
               onClick={checkForUpdates}
               disabled={status.checking || status.downloading || status.readyToInstall}
@@ -50,6 +50,11 @@ export function UpdateStatus() {
         {isDev ? (
           <div className="text-sm text-muted-foreground">
             Auto-updates are disabled in development mode.
+          </div>
+        ) : status.channelConfigured === false ? (
+          <div className="text-sm text-muted-foreground">
+            Diarix updates are disabled until this fork publishes its own signed release channel.
+            Voicebox releases are never installed over Diarix.
           </div>
         ) : (
           <>

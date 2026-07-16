@@ -14,6 +14,7 @@ import {
   FileText,
   Loader2,
   Mic,
+  RefreshCw,
   Settings2,
   Sparkles,
   Square,
@@ -145,6 +146,15 @@ export function CapturesTab() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Server-side search covers the full capture history, not just the 200
+  // most recent rows this tab loads; the client-side `filtered` pass below
+  // keeps keystroke feedback instant while the debounced fetch is in flight.
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => window.clearTimeout(handle);
+  }, [search]);
   const [showRefined, setShowRefined] = useState(true);
   const [launchedPlayAsId, setLaunchedPlayAsId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -172,14 +182,27 @@ export function CapturesTab() {
   });
 
   const { data: capturesData, isLoading: capturesLoading } = useQuery({
-    queryKey: ['captures'],
-    queryFn: () => apiClient.listCaptures(200, 0),
+    queryKey: ['captures', debouncedSearch],
+    queryFn: () => apiClient.listCaptures(200, 0, debouncedSearch || undefined),
   });
 
   const { data: profiles } = useQuery({
     queryKey: ['profiles'],
     queryFn: () => apiClient.listProfiles(),
   });
+
+  const { data: modelStatus } = useQuery({
+    queryKey: ['modelStatus'],
+    queryFn: () => apiClient.getModelStatus(),
+    staleTime: 10_000,
+  });
+  const downloadedSttModels = useMemo(
+    () =>
+      modelStatus?.models.filter(
+        (model) => model.modality === 'stt' && model.downloaded,
+      ) ?? [],
+    [modelStatus],
+  );
 
   const captures = capturesData?.items ?? [];
 
@@ -207,7 +230,9 @@ export function CapturesTab() {
       listen<{ capture: CaptureResponse }>('capture:created', (event) => {
         const capture = event.payload?.capture;
         if (capture) {
-          queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) => {
+          // Seed the unfiltered list (search key '') — a filtered view will
+          // pick the row up from the invalidation below instead.
+          queryClient.setQueryData<CaptureListResponse>(['captures', ''], (prev) => {
             if (!prev) return prev;
             if (prev.items.some((c) => c.id === capture.id)) return prev;
             return { ...prev, items: [capture, ...prev.items], total: prev.total + 1 };
@@ -256,6 +281,27 @@ export function CapturesTab() {
     },
     onError: (err: Error) => {
       toast({ title: t('captures.toast.deleteFailed'), description: err.message, variant: 'destructive' });
+    },
+  });
+
+  const retranscribeMutation = useMutation({
+    mutationFn: async ({ captureId, model }: { captureId: string; model: string }) =>
+      apiClient.retranscribeCapture(captureId, { model }),
+    onSuccess: (capture) => {
+      queryClient.invalidateQueries({ queryKey: ['captures'] });
+      toast({
+        title: t('captures.toast.retranscribed'),
+        description: t('captures.toast.retranscribedDetail', {
+          model: capture.stt_model ?? '',
+        }),
+      });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: t('captures.toast.retranscribeFailed'),
+        description: err.message,
+        variant: 'destructive',
+      });
     },
   });
 
@@ -776,16 +822,63 @@ export function CapturesTab() {
                 size="sm"
                 onClick={() => session.refine(selected.id)}
                 disabled={session.isRefining}
+                title="Runs locally with the selected Qwen3 model. No API key or cloud service is used."
               >
                 {session.isRefining ? (
                   <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
                 ) : (
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                 )}
-                {selected.transcript_refined
-                  ? t('captures.actions.reRefine')
-                  : t('captures.actions.refine')}
+                {session.isRefining
+                  ? 'Refining locally…'
+                  : selected.transcript_refined
+                    ? 'Refine locally again'
+                    : 'Refine locally'}
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={retranscribeMutation.isPending || !downloadedSttModels.length}
+                  >
+                    {retranscribeMutation.isPending ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    {retranscribeMutation.isPending
+                      ? t('captures.actions.retranscribing')
+                      : t('captures.actions.retranscribe')}
+                    <ChevronDown className="h-3.5 w-3.5 ml-1 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
+                    {t('captures.actions.retranscribeDropdownLabel')}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {downloadedSttModels.map((model) => (
+                    <DropdownMenuItem
+                      key={model.model_name}
+                      onClick={() =>
+                        retranscribeMutation.mutate({
+                          captureId: selected.id,
+                          model: model.model_name,
+                        })
+                      }
+                      className="py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{model.display_name}</div>
+                      </div>
+                      {model.model_name === selected.stt_model && (
+                        <Check className="h-3.5 w-3.5 text-accent shrink-0" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm">

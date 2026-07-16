@@ -9,6 +9,7 @@ const isWindows = () => {
 
 class TauriUpdater implements PlatformUpdater {
   private status: UpdateStatus = {
+    channelConfigured: false,
     checking: false,
     available: false,
     downloading: false,
@@ -37,6 +38,17 @@ class TauriUpdater implements PlatformUpdater {
   }
 
   async checkForUpdates(): Promise<void> {
+    if (!this.status.channelConfigured) {
+      this.status = {
+        ...this.status,
+        checking: false,
+        available: false,
+        error: undefined,
+      };
+      this.notifySubscribers();
+      return;
+    }
+
     try {
       this.status = { ...this.status, checking: true, error: undefined };
       this.notifySubscribers();

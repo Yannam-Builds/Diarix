@@ -2,7 +2,7 @@
 PyTorch backend implementation for TTS and STT.
 """
 
-from typing import Optional, List, Tuple
+from typing import Callable, Optional, List, Tuple
 import asyncio
 import logging
 import torch
@@ -10,7 +10,14 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-from . import TTSBackend, STTBackend, LANGUAGE_CODE_TO_NAME, WHISPER_HF_REPOS
+from . import (
+    LANGUAGE_CODE_TO_NAME,
+    WHISPER_HF_REPOS,
+    ProgressCallback,
+    STTBackend,
+    TTSBackend,
+)
+from .stt.common import report_progress
 from .base import (
     is_model_cached,
     get_torch_device,
@@ -278,6 +285,8 @@ class PyTorchSTTBackend:
 
         if self.model is not None and self.model_size == model_size:
             return
+        if self.model is not None:
+            self.unload_model()
 
         await asyncio.to_thread(self._load_model_sync, model_size)
 
@@ -290,17 +299,25 @@ class PyTorchSTTBackend:
         is_cached = self._is_model_cached(model_size)
 
         with model_load_progress(progress_model_name, is_cached):
-            from transformers import WhisperProcessor, WhisperForConditionalGeneration
+            from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
             model_name = WHISPER_HF_REPOS.get(model_size, f"openai/whisper-{model_size}")
             logger.info("Loading Whisper model %s on %s...", model_size, self.device)
 
             self.processor = WhisperProcessor.from_pretrained(model_name)
-            self.model = WhisperForConditionalGeneration.from_pretrained(model_name)
+            model_dtype = torch.float16 if self.device == "cuda" else torch.float32
+            self.model = WhisperForConditionalGeneration.from_pretrained(
+                model_name,
+                dtype=model_dtype,
+                low_cpu_mem_usage=True,
+            )
 
         self.model.to(self.device)
         self.model_size = model_size
-        logger.info("Whisper model %s loaded successfully", model_size)
+        logger.info(
+            "Whisper model %s loaded successfully with native long-form generation",
+            model_size,
+        )
 
     def unload_model(self):
         """Unload the model to free memory."""
@@ -319,59 +336,103 @@ class PyTorchSTTBackend:
         audio_path: str,
         language: Optional[str] = None,
         model_size: Optional[str] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+        should_stop: Optional[Callable[[], bool]] = None,
+        partial_callback: Optional[Callable[[str], None]] = None,
+        segments_callback: Optional[Callable[[list], None]] = None,
     ) -> str:
         """
         Transcribe audio to text.
+
+        segments_callback is accepted but unused: batch_decode strips the
+        timestamp tokens, so this path has no honest per-segment times to
+        report. Registry capabilities match (core whisper models do not
+        declare segment_timestamps), keeping timestamped export gated to
+        Faster-Whisper and WhisperX.
 
         Args:
             audio_path: Path to audio file
             language: Optional language hint
             model_size: Optional model size override
+            should_stop: Polled from inside Whisper's own long-form progress
+                callback (which HF's generate() already calls once per
+                internal window) so a cancelled job aborts generation at the
+                next window instead of running the whole file.
 
         Returns:
             Transcribed text
         """
         await self.load_model_async(model_size)
 
+        class _StopRequested(Exception):
+            pass
+
         def _transcribe_sync():
-            """Run synchronous transcription in thread pool."""
-            # Load audio
+            """Run native long-form transcription in a thread pool."""
+            # Central ingestion supplies model-ready 16 kHz mono audio. Keep
+            # truncation disabled so Whisper's generate() method can advance
+            # through every 30-second window and return the complete recording.
             audio, _sr = load_audio(audio_path, sample_rate=16000)
 
-            # Inference runs with the process's default HF_HUB_OFFLINE
-            # state — forcing offline here (issue #462) broke online users
-            # whose `get_decoder_prompt_ids` / tokenizer calls issue
-            # legitimate metadata lookups.
-            # Process audio
             inputs = self.processor(
                 audio,
                 sampling_rate=16000,
                 return_tensors="pt",
+                return_attention_mask=True,
+                truncation=False,
+                # A one-item batch makes ``longest`` a no-op, leaving short
+                # clips below Whisper's required 30-second (3000-frame)
+                # encoder window. ``max_length`` pads short clips while
+                # ``truncation=False`` still preserves long recordings for
+                # native sequential generation.
+                padding="max_length",
             )
-            inputs = inputs.to(self.device)
-
-            # Generate transcription
-            # If language is provided, force it; otherwise let Whisper auto-detect
-            generate_kwargs = {}
+            input_features = inputs["input_features"].to(
+                self.device,
+                dtype=self.model.dtype,
+            )
+            generate_kwargs = {
+                "input_features": input_features,
+                "return_timestamps": True,
+                "task": "transcribe",
+            }
+            if "attention_mask" in inputs:
+                generate_kwargs["attention_mask"] = inputs["attention_mask"].to(self.device)
             if language:
-                forced_decoder_ids = self.processor.get_decoder_prompt_ids(
-                    language=language,
-                    task="transcribe",
-                )
-                generate_kwargs["forced_decoder_ids"] = forced_decoder_ids
+                generate_kwargs["language"] = language
 
-            with torch.no_grad():
-                predicted_ids = self.model.generate(
-                    inputs["input_features"],
-                    **generate_kwargs,
-                )
+            if progress_callback is not None or should_stop is not None:
+                def monitor_progress(frame_progress) -> None:
+                    """Translate Transformers' processed/total frame tensor.
 
-            # Decode
+                    HF's long-form generate() calls this once per internal
+                    30s window, which doubles as our only interruption point
+                    inside a single blocking generate() call.
+                    """
+                    if should_stop is not None and should_stop():
+                        raise _StopRequested()
+                    try:
+                        current = float(frame_progress[:, 0].max().item())
+                        total = float(frame_progress[:, 1].max().item())
+                    except (AttributeError, IndexError, TypeError, ValueError):
+                        return
+                    if total > 0 and progress_callback is not None:
+                        report_progress(progress_callback, current / total)
+
+                generate_kwargs["monitor_progress"] = monitor_progress
+
+            report_progress(progress_callback, 0.0)
+            try:
+                with torch.no_grad():
+                    predicted_ids = self.model.generate(**generate_kwargs)
+            except _StopRequested:
+                return ""
+
             transcription = self.processor.batch_decode(
                 predicted_ids,
                 skip_special_tokens=True,
             )[0]
-
+            report_progress(progress_callback, 1.0)
             return transcription.strip()
 
         # Run blocking transcription in thread pool

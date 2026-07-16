@@ -5,6 +5,8 @@ Task tracking for active downloads and generations.
 from typing import Optional, Dict, List
 from datetime import datetime
 from dataclasses import dataclass, field
+from copy import deepcopy
+import threading
 
 
 @dataclass
@@ -25,12 +27,48 @@ class GenerationTask:
     started_at: datetime = field(default_factory=datetime.utcnow)
 
 
+@dataclass
+class TranscriptionResult:
+    """One completed file in a batch transcription task."""
+
+    filename: str
+    output_path: str
+    text: str
+    duration: float
+    model_name: str
+    extra_outputs: List[str] = field(default_factory=list)
+
+
+@dataclass
+class TranscriptionTask:
+    """Durable in-memory state exposed by the transcription job API."""
+
+    task_id: str
+    status: str
+    model_name: str
+    language: Optional[str]
+    precision: str
+    output_dir: str
+    total_files: int
+    completed_files: int = 0
+    current_file: Optional[str] = None
+    stage: str = "queued"
+    progress: float = 0.0
+    error: Optional[str] = None
+    partial_text: str = ""
+    results: List[TranscriptionResult] = field(default_factory=list)
+    work_dir: Optional[str] = field(default=None, repr=False)
+    started_at: datetime = field(default_factory=datetime.utcnow, repr=False)
+
+
 class TaskManager:
     """Manages active downloads and generations."""
     
     def __init__(self):
         self._active_downloads: Dict[str, DownloadTask] = {}
         self._active_generations: Dict[str, GenerationTask] = {}
+        self._transcription_tasks: Dict[str, TranscriptionTask] = {}
+        self._transcription_lock = threading.RLock()
     
     def start_download(self, model_name: str) -> None:
         """Mark a download as started."""
@@ -71,6 +109,66 @@ class TaskManager:
     def get_active_generations(self) -> List[GenerationTask]:
         """Get all active generations."""
         return list(self._active_generations.values())
+
+    def start_transcription(
+        self,
+        *,
+        task_id: str,
+        model_name: str,
+        language: Optional[str],
+        precision: str,
+        output_dir: str,
+        total_files: int,
+        work_dir: str,
+    ) -> TranscriptionTask:
+        """Create and retain a transcription task until task history is cleared."""
+        task = TranscriptionTask(
+            task_id=task_id,
+            status="queued",
+            model_name=model_name,
+            language=language,
+            precision=precision,
+            output_dir=output_dir,
+            total_files=total_files,
+            work_dir=work_dir,
+        )
+        with self._transcription_lock:
+            self._transcription_tasks[task_id] = task
+            return deepcopy(task)
+
+    def update_transcription(self, task_id: str, **changes) -> Optional[TranscriptionTask]:
+        """Apply an atomic state update and return a detached snapshot."""
+        with self._transcription_lock:
+            task = self._transcription_tasks.get(task_id)
+            if task is None:
+                return None
+            for key, value in changes.items():
+                if not hasattr(task, key) or key in {"task_id", "results"}:
+                    raise ValueError(f"Unsupported transcription task field: {key}")
+                setattr(task, key, value)
+            task.progress = min(100.0, max(0.0, float(task.progress)))
+            return deepcopy(task)
+
+    def append_transcription_result(
+        self, task_id: str, result: TranscriptionResult
+    ) -> Optional[TranscriptionTask]:
+        """Append one completed result without exposing mutable shared state."""
+        with self._transcription_lock:
+            task = self._transcription_tasks.get(task_id)
+            if task is None:
+                return None
+            task.results.append(result)
+            task.completed_files = len(task.results)
+            return deepcopy(task)
+
+    def get_transcription_task(self, task_id: str) -> Optional[TranscriptionTask]:
+        with self._transcription_lock:
+            task = self._transcription_tasks.get(task_id)
+            return deepcopy(task) if task else None
+
+    def get_transcription_tasks(self) -> List[TranscriptionTask]:
+        with self._transcription_lock:
+            return deepcopy(list(self._transcription_tasks.values()))
     
     def cancel_download(self, model_name: str) -> bool:
         """Cancel/dismiss a download task (removes it from active list)."""
@@ -80,6 +178,8 @@ class TaskManager:
         """Clear all download and generation tasks."""
         self._active_downloads.clear()
         self._active_generations.clear()
+        with self._transcription_lock:
+            self._transcription_tasks.clear()
 
     def is_download_active(self, model_name: str) -> bool:
         """Check if a download is active."""

@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import base64 as b64
 import logging
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -107,7 +106,7 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool(
         name="voicebox.transcribe",
         description=(
-            "Transcribe an audio clip to text using Voicebox's local Whisper. "
+            "Transcribe audio or video media with Diarix's selected local STT model. "
             "Pass exactly one of `audio_base64` (bytes as base64) or "
             "`audio_path` (absolute local file path — loopback callers only)."
         ),
@@ -143,7 +142,7 @@ def register_tools(mcp: FastMCP) -> None:
                 )
             return await _transcribe_file(path, language, model)
 
-        # Base64 mode: decode into a temp file, transcribe, clean up.
+        # Base64 mode: decode beneath the selected media cache, transcribe, clean up.
         try:
             raw = b64.b64decode(audio_base64, validate=True)
         except Exception as exc:
@@ -152,15 +151,15 @@ def register_tools(mcp: FastMCP) -> None:
             raise ValueError(
                 f"Audio exceeds {MAX_TRANSCRIBE_BYTES // (1024 * 1024)} MB limit."
             )
-        with tempfile.NamedTemporaryFile(
-            suffix=".wav", delete=False
-        ) as tmp:
-            tmp.write(raw)
-            tmp_path = Path(tmp.name)
+        from ..services.media_ingestion import cleanup_media_job_dir, create_media_job_dir
+
+        job_dir = create_media_job_dir()
+        tmp_path = job_dir / "input.media"
         try:
+            await asyncio.to_thread(tmp_path.write_bytes, raw)
             return await _transcribe_file(tmp_path, language, model)
         finally:
-            tmp_path.unlink(missing_ok=True)
+            cleanup_media_job_dir(job_dir)
 
     @mcp.tool(
         name="voicebox.list_captures",
@@ -284,34 +283,31 @@ def _speak_response(
 async def _transcribe_file(
     path: Path, language: str | None, model: str | None
 ) -> dict[str, Any]:
-    from ..backends import WHISPER_HF_REPOS
+    from ..backends import resolve_stt_config
+    from ..backends.base import is_model_cached
     from ..services import transcribe as transcribe_service
-    from ..utils.audio import load_audio
+    from ..services.media_ingestion import ingest_media
 
-    whisper = transcribe_service.get_whisper_model()
-    model_size = model or whisper.model_size
-    valid = list(WHISPER_HF_REPOS.keys())
-    if model_size not in valid:
-        raise ValueError(
-            f"Invalid STT model '{model_size}'. Must be one of: {', '.join(valid)}"
-        )
-
-    # load_audio is sync; keep the event loop responsive.
-    audio, sr = await asyncio.to_thread(load_audio, str(path))
-    duration = len(audio) / sr
-
+    try:
+        config = resolve_stt_config(model)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    backend, _ = transcribe_service.get_stt_model(config.model_name)
     if (
-        not whisper.is_loaded() or whisper.model_size != model_size
-    ) and not whisper._is_model_cached(model_size):
+        not backend.is_loaded() or backend.model_size != config.model_size
+    ) and not is_model_cached(config.hf_repo_id):
         raise ValueError(
-            f"Whisper model '{model_size}' is not yet downloaded. Open "
-            "Voicebox → Settings → Models to download it first."
+            f"STT model '{config.model_name}' is not yet downloaded. Open "
+            "Diarix → Models to download it first."
         )
 
-    text = await whisper.transcribe(str(path), language, model_size)
-    return {
-        "text": text,
-        "duration": duration,
-        "language": language,
-        "model": model_size,
-    }
+    async with ingest_media(path, config.audio_input) as media:
+        text, actual_model = await transcribe_service.transcribe_audio(
+            str(media.audio_path), config.model_name, language
+        )
+        return {
+            "text": text,
+            "duration": float(media.duration or 0.0),
+            "language": language,
+            "model": actual_model,
+        }

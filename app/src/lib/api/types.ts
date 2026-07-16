@@ -157,6 +157,8 @@ export interface RefinementFlags {
   smart_cleanup: boolean;
   self_correction: boolean;
   preserve_technical: boolean;
+  /** Free-text transformation preferences appended to the refinement prompt. */
+  custom_instructions?: string | null;
 }
 
 export interface CaptureResponse {
@@ -196,18 +198,19 @@ export interface CaptureRefineRequest {
 }
 
 export interface CaptureRetranscribeRequest {
-  model?: WhisperModelSize;
+  model?: string;
   language?: LanguageCode;
 }
 
 export interface CaptureSettings {
-  stt_model: WhisperModelSize;
+  stt_model: string;
   language: string;
   auto_refine: boolean;
   llm_model: Qwen3ModelSize;
   smart_cleanup: boolean;
   self_correction: boolean;
   preserve_technical: boolean;
+  custom_instructions?: string | null;
   allow_auto_paste: boolean;
   default_playback_voice_id: string | null;
   /** Whether the global keyboard hotkey is armed. Off by default — turning
@@ -250,6 +253,14 @@ export interface GenerationSettings {
 
 export type GenerationSettingsUpdate = Partial<GenerationSettings>;
 
+export interface ResourceSettings {
+  limits_enabled: boolean;
+  cpu_percent: number;
+  vram_percent: number;
+}
+
+export type ResourceSettingsUpdate = Pick<ResourceSettings, 'limits_enabled'>;
+
 export interface TranscriptionRequest {
   language?: LanguageCode;
   model?: WhisperModelSize;
@@ -258,6 +269,55 @@ export interface TranscriptionRequest {
 export interface TranscriptionResponse {
   text: string;
   duration: number;
+}
+
+export interface TranscriptionJobRequest {
+  files: File[];
+  model: string;
+  language: string;
+  precision: string;
+  output_suffix: string;
+  output_dir: string;
+  /** Comma-joined subset of txt,srt,vtt,json. txt is always written; the
+   *  timestamped formats only apply to models with real segment timestamps. */
+  export_formats?: string;
+  /** Break paragraphs on silence gaps using segment timestamps. */
+  silence_paragraphs?: boolean;
+}
+
+export interface TranscriptionJobStartResponse {
+  task_id: string;
+  status: string;
+}
+
+export interface TranscriptionJobResult {
+  filename: string;
+  output_path: string;
+  text: string;
+  duration: number;
+  model_name: string;
+  /** Paths of additional exports written beside the .txt (srt/vtt/json). */
+  extra_outputs?: string[];
+}
+
+export interface TranscriptionJob {
+  task_id: string;
+  status: string;
+  model_name: string;
+  language: string;
+  precision: string;
+  output_dir: string;
+  total_files: number;
+  completed_files: number;
+  current_file?: string | null;
+  stage: string;
+  progress: number;
+  error?: string | null;
+  /** Accumulated transcript text for the file currently being transcribed,
+   *  updated as each audio chunk completes. Empty when the engine doesn't
+   *  support chunked reporting (e.g. WhisperX) or between files. */
+  partial_text?: string;
+  results: TranscriptionJobResult[];
 }
 
 export interface HealthResponse {
@@ -326,11 +386,28 @@ export interface ModelProgress {
 export interface ModelStatus {
   model_name: string;
   display_name: string;
+  model_size: string;
   hf_repo_id?: string; // HuggingFace repository ID
   downloaded: boolean;
   downloading: boolean; // True if download is in progress
   size_mb?: number;
   loaded: boolean;
+  engine: string;
+  modality: 'tts' | 'stt' | 'llm';
+  runtime_group: 'core' | 'advanced-asr' | string;
+  capabilities: string[];
+  languages: string[];
+  description: string;
+  precision_options: string[];
+  default_precision?: string | null;
+  recommended: boolean;
+  min_vram_gb?: number | null;
+  audio_sample_rate?: number | null;
+  audio_channels?: number | null;
+  audio_format?: string | null;
+  /** Display names of other models that resolve to the same HuggingFace repo
+   *  (e.g. WhisperX Large v3 and Faster-Whisper Large v3 share one checkpoint) */
+  shares_cache_with?: string[];
 }
 
 export interface HuggingFaceModelInfo {
@@ -378,6 +455,7 @@ export interface ActiveGenerationTask {
 export interface ActiveTasksResponse {
   downloads: ActiveDownloadTask[];
   generations: ActiveGenerationTask[];
+  transcriptions: TranscriptionJob[];
 }
 
 export interface StoryCreate {

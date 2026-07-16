@@ -6,7 +6,9 @@ voice prompt combination, and model loading progress tracking.
 """
 
 import logging
+import os
 import platform
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
@@ -21,10 +23,34 @@ from ..utils.tasks import get_task_manager
 logger = logging.getLogger(__name__)
 
 
+def materialize_windows_snapshot_links(snapshot_dir: str | Path) -> Path:
+    """Replace Hugging Face snapshot symlinks with hardlinks on Windows.
+
+    CTranslate2 cannot reliably open relative snapshot symlinks when the
+    Hugging Face cache is on a mapped drive and Windows supplies an extended
+    ``\\\\?\\`` path. Hardlinks retain Hugging Face's deduplicated blob storage
+    without copying model weights, and ordinary files are left untouched.
+    """
+    snapshot = Path(snapshot_dir)
+    if platform.system() != "Windows":
+        return snapshot
+
+    for entry in snapshot.rglob("*"):
+        if not entry.is_symlink():
+            continue
+        target = entry.resolve(strict=True)
+        entry.unlink()
+        try:
+            os.link(target, entry)
+        except OSError:
+            shutil.copy2(target, entry)
+    return snapshot
+
+
 def is_model_cached(
     hf_repo: str,
     *,
-    weight_extensions: tuple[str, ...] = (".safetensors", ".bin"),
+    weight_extensions: tuple[str, ...] = (".safetensors", ".bin", ".nemo"),
     required_files: Optional[list[str]] = None,
 ) -> bool:
     """

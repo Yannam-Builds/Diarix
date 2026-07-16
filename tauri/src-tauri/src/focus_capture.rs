@@ -26,7 +26,7 @@
 //! PID + bundle id + role are all captured for diagnostics — the bundle
 //! id lets step 6 (internal direct injection) detect "focus was inside
 //! Voicebox itself" and short-circuit the synthetic-paste path. On
-//! Windows, `bundle_id` holds the lowercased exe basename (`"voicebox.exe"`)
+//! Windows, `bundle_id` holds the lowercased exe basename (`"diarix.exe"`)
 //! since there's no equivalent of macOS' reverse-DNS bundle identifier.
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -350,7 +350,7 @@ mod win {
     }
 
     /// Query a PID's executable path and return its lowercased basename
-    /// (e.g. `"voicebox.exe"`). This is the Windows analogue of macOS'
+/// (e.g. `"diarix.exe"`). This is the Windows analogue of macOS'
     /// `bundleIdentifier`, just less globally unique — two apps with the
     /// same exe name can collide, but that's rare enough to accept for
     /// the self-paste short-circuit.

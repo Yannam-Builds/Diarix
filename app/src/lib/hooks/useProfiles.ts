@@ -126,11 +126,11 @@ export function useExportProfile() {
       // Get profile name for filename
       const profile = await apiClient.getProfile(profileId);
       const safeName = profile.name.replace(/[^a-z0-9]/gi, '-').toLowerCase();
-      const filename = `profile-${safeName}.voicebox.zip`;
+      const filename = `profile-${safeName}.diarix.zip`;
 
       await platform.filesystem.saveFile(filename, blob, [
         {
-          name: 'Voicebox Profile',
+        name: 'Diarix Profile',
           extensions: ['zip'],
         },
       ]);

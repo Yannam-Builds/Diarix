@@ -2,7 +2,7 @@
 Pydantic models for request/response validation.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -182,12 +182,48 @@ class TranscriptionResponse(BaseModel):
     duration: float
 
 
+class TranscriptionJobCreateResponse(BaseModel):
+    """Acknowledgement returned after a batch has entered the task queue."""
+
+    task_id: str
+    status: str
+
+
+class TranscriptionJobResult(BaseModel):
+    filename: str
+    output_path: str
+    text: str
+    duration: float
+    model_name: str
+    extra_outputs: List[str] = Field(default_factory=list)
+
+
+class TranscriptionJobResponse(BaseModel):
+    """Complete observable state for one queued transcription batch."""
+
+    task_id: str
+    status: str
+    model_name: str
+    language: Optional[str] = None
+    precision: str
+    output_dir: str
+    total_files: int
+    completed_files: int
+    current_file: Optional[str] = None
+    stage: str
+    progress: float
+    error: Optional[str] = None
+    partial_text: str = ""
+    results: List[TranscriptionJobResult] = Field(default_factory=list)
+
+
 class RefinementFlagsModel(BaseModel):
-    """Boolean toggles that drive the refinement prompt builder."""
+    """Toggles and preferences that drive the refinement prompt builder."""
 
     smart_cleanup: bool = True
     self_correction: bool = True
     preserve_technical: bool = True
+    custom_instructions: Optional[str] = Field(default=None, max_length=500)
 
 
 class CaptureResponse(BaseModel):
@@ -241,20 +277,21 @@ class CaptureRefineRequest(BaseModel):
 class CaptureRetranscribeRequest(BaseModel):
     """Request to re-run STT on a capture's audio with a different model."""
 
-    model: Optional[str] = Field(None, pattern="^(base|small|medium|large|turbo)$")
-    language: Optional[str] = Field(None, pattern="^(en|zh|ja|ko|de|fr|ru|pt|es|it)$")
+    model: Optional[str] = None
+    language: Optional[str] = None
 
 
 class CaptureSettingsResponse(BaseModel):
     """Server-persisted defaults for the capture / refine flow."""
 
-    stt_model: str = Field(default="turbo", pattern="^(base|small|medium|large|turbo)$")
+    stt_model: str = "whisper-turbo"
     language: str = Field(default="auto")
     auto_refine: bool = True
     llm_model: str = Field(default="0.6B", pattern="^(0\\.6B|1\\.7B|4B)$")
     smart_cleanup: bool = True
     self_correction: bool = True
     preserve_technical: bool = True
+    custom_instructions: Optional[str] = None
     allow_auto_paste: bool = True
     default_playback_voice_id: Optional[str] = None
     hotkey_enabled: bool = False
@@ -272,13 +309,14 @@ class CaptureSettingsResponse(BaseModel):
 class CaptureSettingsUpdate(BaseModel):
     """Partial update for capture settings — every field is optional."""
 
-    stt_model: Optional[str] = Field(default=None, pattern="^(base|small|medium|large|turbo)$")
+    stt_model: Optional[str] = None
     language: Optional[str] = None
     auto_refine: Optional[bool] = None
     llm_model: Optional[str] = Field(default=None, pattern="^(0\\.6B|1\\.7B|4B)$")
     smart_cleanup: Optional[bool] = None
     self_correction: Optional[bool] = None
     preserve_technical: Optional[bool] = None
+    custom_instructions: Optional[str] = Field(default=None, max_length=500)
     allow_auto_paste: Optional[bool] = None
     default_playback_voice_id: Optional[str] = None
     hotkey_enabled: Optional[bool] = None
@@ -305,6 +343,21 @@ class GenerationSettingsUpdate(BaseModel):
     crossfade_ms: Optional[int] = Field(default=None, ge=0, le=500)
     normalize_audio: Optional[bool] = None
     autoplay_on_generate: Optional[bool] = None
+
+
+class ResourceSettingsResponse(BaseModel):
+    """Toggleable inference limits applied by the local backend process."""
+
+    limits_enabled: bool = True
+    cpu_percent: int = Field(default=80, ge=10, le=100)
+    vram_percent: int = Field(default=80, ge=10, le=100)
+
+    class Config:
+        from_attributes = True
+
+
+class ResourceSettingsUpdate(BaseModel):
+    limits_enabled: Optional[bool] = None
 
 
 class MCPClientBindingResponse(BaseModel):
@@ -465,16 +518,44 @@ class FilesystemHealthResponse(BaseModel):
     directories: List[DirectoryCheck]
 
 
+class AudioInputSpec(BaseModel):
+    """Normalized audio contract used by a speech-to-text model."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    sample_rate_hz: int
+    channels: int
+    sample_format: str
+    codec: str
+    container: str
+
+
 class ModelStatus(BaseModel):
     """Response model for model status."""
 
     model_name: str
     display_name: str
+    model_size: str = "default"
     hf_repo_id: Optional[str] = None  # HuggingFace repository ID
     downloaded: bool
     downloading: bool = False  # True if download is in progress
     size_mb: Optional[float] = None
     loaded: bool = False
+    engine: str = ""
+    modality: str = "tts"
+    runtime_group: str = "core"
+    capabilities: List[str] = Field(default_factory=list)
+    languages: List[str] = Field(default_factory=list)
+    description: str = ""
+    precision_options: List[str] = Field(default_factory=list)
+    default_precision: Optional[str] = None
+    recommended: bool = False
+    min_vram_gb: Optional[float] = None
+    audio_input: Optional[AudioInputSpec] = None
+    audio_sample_rate: Optional[int] = None
+    audio_channels: Optional[int] = None
+    audio_format: Optional[str] = None
+    shares_cache_with: List[str] = Field(default_factory=list)
 
 
 class ModelStatusListResponse(BaseModel):
@@ -522,6 +603,7 @@ class ActiveTasksResponse(BaseModel):
 
     downloads: List[ActiveDownloadTask]
     generations: List[ActiveGenerationTask]
+    transcriptions: List[TranscriptionJobResponse] = Field(default_factory=list)
 
 
 class AudioChannelCreate(BaseModel):

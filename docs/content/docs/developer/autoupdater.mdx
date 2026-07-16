@@ -1,15 +1,15 @@
 ---
 title: "Auto-Updater"
-description: "How Voicebox automatic updates work"
+description: "How Diarix automatic updates work"
 ---
 
 ## Overview
 
-Voicebox uses Tauri's built-in auto-updater to deliver signed updates to users. The system verifies updates cryptographically before installation.
+Diarix uses Tauri's built-in auto-updater to deliver signed updates to users. The system verifies updates cryptographically before installation.
 
 ## How It Works
 
-When Voicebox launches (in production Tauri builds only), it checks GitHub Releases for a `latest.json` manifest. If a newer version is available:
+When Diarix launches (in production Tauri builds only), it checks GitHub Releases for a `latest.json` manifest. If a newer version is available:
 
 1. **Notification** - An update banner appears at the top of the app
 2. **Download** - User clicks "Install Now" to download the update package
@@ -149,7 +149,7 @@ The CUDA-enabled backend is distributed separately from the main app because bun
 
 **Size comparison (approximate):**
 - Standard CPU bundle (in the installer): ~200–400 MB
-- CUDA server core: ~945 MB (versioned with each Voicebox release)
+- CUDA server core: ~945 MB (versioned with each Diarix release)
 - CUDA libs (NVIDIA runtime DLLs): ~1.7 GB (versioned independently, cached across upgrades)
 
 ### Two-archive split
@@ -159,7 +159,7 @@ Since v0.4, the CUDA binary is packaged as **two archives** instead of one:
 - **Server core** (`voicebox-server-cuda.tar.gz`) — the Python server + PyTorch code, changes every release.
 - **CUDA libs** (`cuda-libs-cu128-v1.tar.gz`) — the heavy NVIDIA CUDA/cuDNN DLLs, only re-downloaded when the CUDA toolkit major version changes.
 
-This means most Voicebox upgrades only re-download the ~945 MB server core, not the full ~2.5 GB bundle.
+This means most Diarix upgrades only re-download the ~945 MB server core, not the full ~2.5 GB bundle.
 
 ### Download Process
 
@@ -169,7 +169,7 @@ When a user clicks "Install CUDA backend" in Settings → GPU:
 2. **CUDA libs archive** — Downloaded separately (or reused if the installed version still matches).
 3. **Verification** — SHA-256 checksum verification for integrity.
 4. **Placement** — Extracted into `{data_dir}/backends/cuda/`.
-5. **Restart** — The Voicebox server restarts and swaps in the CUDA backend.
+5. **Restart** — The Diarix server restarts and swaps in the CUDA backend.
 
 ### Auto-Update on Startup
 

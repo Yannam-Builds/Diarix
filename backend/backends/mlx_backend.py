@@ -2,7 +2,7 @@
 MLX backend implementation for TTS and STT using mlx-audio.
 """
 
-from typing import Optional, List, Tuple
+from typing import Callable, Optional, List, Tuple
 import asyncio
 import logging
 import numpy as np
@@ -17,7 +17,14 @@ from ..utils.hf_offline_patch import patch_huggingface_hub_offline, ensure_origi
 patch_huggingface_hub_offline()
 ensure_original_qwen_config_cached()
 
-from . import TTSBackend, STTBackend, LANGUAGE_CODE_TO_NAME, WHISPER_HF_REPOS
+from . import (
+    LANGUAGE_CODE_TO_NAME,
+    WHISPER_HF_REPOS,
+    ProgressCallback,
+    STTBackend,
+    TTSBackend,
+)
+from .stt.common import report_progress
 from .base import is_model_cached, combine_voice_prompts as _combine_voice_prompts, model_load_progress
 from ..utils.cache import get_cache_key, get_cached_voice_prompt, cache_voice_prompt
 
@@ -326,6 +333,10 @@ class MLXSTTBackend:
         audio_path: str,
         language: Optional[str] = None,
         model_size: Optional[str] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+        should_stop: Optional[Callable[[], bool]] = None,
+        partial_callback: Optional[Callable[[str], None]] = None,
+        segments_callback: Optional[Callable[[list], None]] = None,
     ) -> str:
         """
         Transcribe audio to text.
@@ -334,6 +345,11 @@ class MLXSTTBackend:
             audio_path: Path to audio file
             language: Optional language hint
             model_size: Optional model size override
+            should_stop: Not yet honored on the MLX/Apple Silicon path — mlx-audio's
+                transcribe call has no chunk or callback boundary to poll. A
+                cancelled job here still stops promptly at the batch level
+                (task status flips to cancelled immediately after this call
+                returns), it just can't cut a single long file short.
 
         Returns:
             Transcribed text
@@ -351,7 +367,9 @@ class MLXSTTBackend:
             # Inference runs with the process's default HF_HUB_OFFLINE
             # state — see the comment in MLXTTSBackend.generate for the
             # regression this revert fixes (issue #462).
+            report_progress(progress_callback, 0.0)
             result = self.model.generate(str(audio_path), **decode_options)
+            report_progress(progress_callback, 1.0)
 
             # Extract text from result
             if isinstance(result, str):

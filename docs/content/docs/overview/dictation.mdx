@@ -6,7 +6,7 @@ description: "Hold a key anywhere on your machine, speak, release — the transc
 ## Overview
 
 Dictation lets you turn speech into clean text anywhere on your computer. Hold
-a chord, talk, release — Voicebox transcribes what you said with Whisper,
+a chord, talk, release — Diarix transcribes what you said with Whisper,
 optionally cleans it up with a local LLM, and pastes the result into the text
 field you had focused when you started.
 
@@ -15,7 +15,7 @@ the machine.
 
 <Callout type="info">
   Dictation was introduced in **0.5.0** alongside the Captures tab and the
-  per-profile personality modes. It's the "input" half of Voicebox's voice I/O
+  per-profile personality modes. It's the "input" half of Diarix's voice I/O
   loop — cloning and TTS are still the "output" half.
 </Callout>
 
@@ -35,7 +35,7 @@ the machine.
     auto-refine is on, then disappears.
   </Step>
   <Step title="Text lands in your app">
-    If auto-paste is enabled and Voicebox has Accessibility permission, the
+    If auto-paste is enabled and Diarix has Accessibility permission, the
     transcript pastes into the text field you had focused when you started
     talking — not wherever focus drifted while you were speaking.
   </Step>
@@ -47,7 +47,7 @@ original audio and the transcript paired together. See
 
 ## Push-to-talk and toggle modes
 
-Voicebox ships two chord behaviors out of the box:
+Diarix ships two chord behaviors out of the box:
 
 | Mode | Default (macOS) | Default (Windows) | Behavior |
 |---|---|---|---|
@@ -79,7 +79,7 @@ so it appears instantly when you hit the chord, with no window flash.
 Open **Settings → Captures → Dictation** to change either chord.
 
 - **Left vs right modifier badges.** When you hold keys into the chord
-  picker, Voicebox records whether each modifier is the left or right variant.
+  picker, Diarix records whether each modifier is the left or right variant.
   That means you can bind to just the right `⌥` while leaving the left `⌥`
   alone — useful if you want dictation on one hand and keep your
   other-hand shortcuts intact.
@@ -94,7 +94,7 @@ Open **Settings → Captures → Dictation** to change either chord.
 
 ## Auto-paste into the focused app
 
-Once transcription finishes, Voicebox can synthesize a native paste into
+Once transcription finishes, Diarix can synthesize a native paste into
 whatever text field had focus when you started the chord. Your clipboard is
 saved before and restored after, so nothing you had copied goes missing.
 
@@ -128,7 +128,7 @@ What refinement typically fixes:
   attempts (`could you uh run the migration real quick, and then, yeah,
   check the logs` → `Could you run the migration, then check the logs?`)
 - Basic punctuation and capitalization
-- Whisper loop hallucinations — Voicebox strips repeated tokens (six or
+- Whisper loop hallucinations — Diarix strips repeated tokens (six or
   more identical tokens in a row, case-insensitive) *before* the LLM
   sees the transcript, so a small refinement model can't echo them back
 
@@ -168,7 +168,7 @@ LLM in the app, not two. See [Voice Personalities](/overview/voice-personalities
 ### Windows
 
 - **UAC / UIPI caveat.** Synthetic paste into an *elevated* window from a
-  non-elevated Voicebox is blocked by Windows itself. Run Voicebox elevated
+  non-elevated Diarix is blocked by Windows itself. Run Diarix elevated
   if you regularly dictate into elevated apps (e.g. an elevated terminal or
   Task Manager).
 - **Right-hand default chord** (`Ctrl+Shift`) avoids AltGr collisions on
@@ -183,10 +183,10 @@ LLM in the app, not two. See [Voice Personalities](/overview/voice-personalities
 
 ## When auto-paste skips itself
 
-A few cases where Voicebox deliberately does *not* synthesize a paste:
+A few cases where Diarix deliberately does *not* synthesize a paste:
 
-- **Focus was inside Voicebox** when the chord started. The transcript goes
-  to the Captures tab so a dictation-into-Voicebox round-trip doesn't
+- **Focus was inside Diarix** when the chord started. The transcript goes
+  to the Captures tab so a dictation-into-Diarix round-trip doesn't
   accidentally paste into the generate box.
 - **No text focus detected.** The transcript still lands in the Captures
   tab; copy it from there with one click.

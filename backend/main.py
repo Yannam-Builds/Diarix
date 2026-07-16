@@ -1,17 +1,30 @@
-"""Entry point for the voicebox backend.
+"""Entry point for the Diarix backend.
 
 Imports the configured FastAPI app and provides a ``python -m backend.main``
 entry point for development.
 """
 
 import argparse
+import sys
+
+
+def _configure_text_streams() -> None:
+    """Keep third-party model logs Unicode-safe on Windows consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
+_configure_text_streams()
+
 import uvicorn
 
 from .app import app  # noqa: F401 -- re-export for uvicorn "backend.main:app"
 from . import config, database
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="voicebox backend server")
+    parser = argparse.ArgumentParser(description="Diarix backend server")
     parser.add_argument(
         "--host",
         type=str,
@@ -21,7 +34,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
+        default=17493,
         help="Port to bind to",
     )
     parser.add_argument(

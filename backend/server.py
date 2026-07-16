@@ -1,5 +1,5 @@
 """
-Entry point for PyInstaller-bundled voicebox server.
+Entry point for PyInstaller-bundled Diarix server.
 
 This module provides an entry point that works with PyInstaller by using
 absolute imports instead of relative imports.
@@ -45,20 +45,43 @@ if getattr(sys, 'frozen', False):
 # version check doesn't block for 30+ seconds loading torch etc.
 if "--version" in sys.argv:
     from backend import __version__
-    print(f"voicebox-server {__version__}")
+    version_str = f"diarix-server {__version__}\n"
+    try:
+        exe_dir = os.path.dirname(sys.executable)
+        if getattr(sys, 'frozen', False):
+            version_path = os.path.join(exe_dir, "version.txt")
+        else:
+            version_path = os.path.join(os.path.dirname(__file__), "version.txt")
+        with open(version_path, "w") as f:
+            f.write(version_str)
+    except Exception:
+        pass
+    if sys.__stdout__ is not None:
+        try:
+            sys.__stdout__.write(version_str)
+            sys.__stdout__.flush()
+        except Exception:
+            pass
+    try:
+        print(f"diarix-server {__version__}")
+    except Exception:
+        pass
     sys.exit(0)
 
 # Detect backend variant from binary name BEFORE importing backend modules
 # so that env-var guards in app.py (e.g. HSA_OVERRIDE_GFX_VERSION) fire at import time.
+# Legacy voicebox-server-* names stay recognized so a renamed binary dropped
+# into an old install (or vice versa) still picks its correct variant.
 _binary_name = os.path.basename(sys.executable).lower()
-if re.search(r"voicebox-server-rocm(\.exe)?$", _binary_name):
+if re.search(r"(diarix|voicebox)-server-rocm(\.exe)?$", _binary_name):
     os.environ["VOICEBOX_BACKEND_VARIANT"] = "rocm"
-elif re.search(r"voicebox-server-cuda(\.exe)?$", _binary_name):
+elif re.search(r"(diarix|voicebox)-server-cuda(\.exe)?$", _binary_name):
     os.environ["VOICEBOX_BACKEND_VARIANT"] = "cuda"
 else:
     os.environ.setdefault("VOICEBOX_BACKEND_VARIANT", "cpu")
 
 
+import json
 import logging
 
 # Set up logging FIRST, before any imports that might fail
@@ -69,9 +92,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import every model runtime without loading weights. Release verification
+# invokes this on the frozen executable so PyInstaller omissions fail before
+# the app is delivered to users.
+if "--runtime-self-test" in sys.argv:
+    from backend.runtime_self_test import run_runtime_self_test
+
+    result = run_runtime_self_test()
+    output_path = None
+    if "--runtime-self-test-output" in sys.argv:
+        output_index = sys.argv.index("--runtime-self-test-output") + 1
+        if output_index < len(sys.argv):
+            output_path = sys.argv[output_index]
+    if output_path:
+        with open(output_path, "w", encoding="utf-8") as output:
+            json.dump(result, output, indent=2)
+    if sys.__stdout__ is not None:
+        try:
+            sys.__stdout__.write(json.dumps(result) + "\n")
+            sys.__stdout__.flush()
+        except Exception:
+            pass
+    sys.exit(0 if result["ok"] else 1)
+
 # Log startup immediately to confirm binary execution
 logger.info("=" * 60)
-logger.info("voicebox-server starting up...")
+logger.info("diarix-server starting up...")
 logger.info(f"Python version: {sys.version}")
 logger.info(f"Executable: {sys.executable}")
 logger.info(f"Arguments: {sys.argv}")
@@ -237,7 +283,7 @@ def _start_parent_watchdog(parent_pid, data_dir=None):
 
 if __name__ == "__main__":
     try:
-        parser = argparse.ArgumentParser(description="voicebox backend server")
+        parser = argparse.ArgumentParser(description="diarix backend server")
         parser.add_argument(
             "--host",
             type=str,
@@ -292,6 +338,9 @@ if __name__ == "__main__":
         # Initialize database after data directory is set
         logger.info("Initializing database...")
         database.init_db()
+        from backend.services.resource_limits import apply_persisted_resource_limits
+
+        apply_persisted_resource_limits()
         logger.info("Database initialized successfully")
 
         logger.info(f"Starting uvicorn server on {args.host}:{args.port}...")

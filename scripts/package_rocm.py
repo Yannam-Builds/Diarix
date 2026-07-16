@@ -2,7 +2,7 @@
 Package the PyInstaller --onedir ROCm build into two archives.
 
 Takes the PyInstaller --onedir output directory and splits it into:
-  1. voicebox-server-rocm.tar.gz       — server core (exe + non-AMD deps)
+  1. diarix-server-rocm.tar.gz       — server core (exe + non-AMD deps)
   2. rocm-libs-{version}.tar.gz        — AMD/ROCm runtime libraries only
   3. rocm-libs.json                    — version manifest for the ROCm libs
 
@@ -11,9 +11,9 @@ every app update while the much larger ROCm runtime stays cached until the
 toolkit version bumps.
 
 Usage:
-    python scripts/package_rocm.py backend/dist/voicebox-server-rocm/
-    python scripts/package_rocm.py backend/dist/voicebox-server-rocm/ --output release-assets/
-    python scripts/package_rocm.py backend/dist/voicebox-server-rocm/ --rocm-libs-version rocm7.2-v1
+    python scripts/package_rocm.py backend/dist/diarix-server-rocm/
+    python scripts/package_rocm.py backend/dist/diarix-server-rocm/ --output release-assets/
+    python scripts/package_rocm.py backend/dist/diarix-server-rocm/ --rocm-libs-version rocm7.2-v1
 """
 
 import argparse
@@ -159,14 +159,14 @@ def package(
 
     # Create server core archive. Files are stored relative to the archive root
     # (no parent prefix) so extracting to backends/rocm/ lands at the right level.
-    server_archive = output_dir / "voicebox-server-rocm.tar.gz"
+    server_archive = output_dir / "diarix-server-rocm.tar.gz"
     print(f"\nCreating server core archive: {server_archive.name}")
     with tarfile.open(server_archive, "w:gz") as tar:
         for rel_str, full_path in core_files:
             tar.add(full_path, arcname=rel_str)
     server_sha = sha256_file(server_archive)
-    (output_dir / "voicebox-server-rocm.tar.gz.sha256").write_text(
-        f"{server_sha}  voicebox-server-rocm.tar.gz\n"
+    (output_dir / "diarix-server-rocm.tar.gz.sha256").write_text(
+        f"{server_sha}  diarix-server-rocm.tar.gz\n"
     )
     print(f"  Size: {server_archive.stat().st_size / (1024**2):.1f} MB")
     print(f"  SHA-256: {server_sha[:16]}...")
@@ -216,7 +216,7 @@ def main():
     parser.add_argument(
         "input",
         type=Path,
-        help="Path to PyInstaller --onedir output directory (e.g. backend/dist/voicebox-server-rocm/)",
+        help="Path to PyInstaller --onedir output directory (e.g. backend/dist/diarix-server-rocm/)",
     )
     parser.add_argument(
         "--output",

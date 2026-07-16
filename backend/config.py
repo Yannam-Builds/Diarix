@@ -1,5 +1,5 @@
 """
-Configuration module for voicebox backend.
+Configuration module for the Diarix backend.
 
 Handles data directory configuration for production bundling.
 """
@@ -122,6 +122,13 @@ def get_generations_dir() -> Path:
 def get_captures_dir() -> Path:
     """Get captures directory path."""
     path = _data_dir / "captures"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_transcriptions_dir() -> Path:
+    """Get the default directory for transcript text files."""
+    path = _data_dir / "transcriptions"
     path.mkdir(parents=True, exist_ok=True)
     return path
 

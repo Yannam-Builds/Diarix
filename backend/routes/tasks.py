@@ -119,7 +119,16 @@ async def get_active_tasks():
             )
         )
 
+    from ..services.transcription_jobs import task_to_public_dict
+
+    active_transcriptions = [
+        models.TranscriptionJobResponse(**task_to_public_dict(task))
+        for task in task_manager.get_transcription_tasks()
+        if task.status not in {"completed", "failed", "cancelled"}
+    ]
+
     return models.ActiveTasksResponse(
         downloads=active_downloads,
         generations=active_generations,
+        transcriptions=active_transcriptions,
     )

@@ -1,6 +1,6 @@
 import { RouterProvider } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import voiceboxLogo from '@/assets/voicebox-logo.png';
+import diarixLogo from '@/assets/diarix-logo.png';
 import { DictateWindow } from '@/components/DictateWindow/DictateWindow';
 import ShinyText from '@/components/ShinyText';
 import { TitleBarDragRegion } from '@/components/TitleBarDragRegion';
@@ -16,7 +16,7 @@ import { router } from '@/router';
 import { useLogStore } from '@/stores/logStore';
 import {
   getDefaultServerUrl,
-  isLoopbackVoiceboxServerUrl,
+  isLoopbackDiarixServerUrl,
   useServerStore,
 } from '@/stores/serverStore';
 
@@ -26,10 +26,10 @@ function isDictateView(): boolean {
 }
 
 /**
- * Validate that a health response has the expected Voicebox-specific shape.
+ * Validate that a health response has the expected Diarix-specific shape.
  * Prevents misidentifying an unrelated service on the same port.
  */
-function isVoiceboxHealthResponse(health: HealthResponse): boolean {
+function isDiarixHealthResponse(health: HealthResponse): boolean {
   return (
     health?.status === 'healthy' &&
     typeof health.model_loaded === 'boolean' &&
@@ -53,28 +53,17 @@ function isPortInUseError(error: unknown): boolean {
 }
 
 const LOADING_MESSAGES = [
-  'Warming up tensors...',
-  'Calibrating synthesizer engine...',
-  'Initializing voice models...',
-  'Loading neural networks...',
-  'Preparing audio pipelines...',
-  'Optimizing waveform generators...',
-  'Tuning frequency analyzers...',
-  'Building voice embeddings...',
-  'Configuring text-to-speech cores...',
-  'Syncing audio buffers...',
-  'Establishing model connections...',
-  'Preprocessing training data...',
-  'Validating voice samples...',
-  'Compiling inference engines...',
-  'Mapping phoneme sequences...',
-  'Aligning prosody parameters...',
-  'Activating speech synthesis...',
-  'Fine-tuning acoustic models...',
-  'Preparing voice cloning matrices...',
-  'Initializing Qwen TTS framework...',
+  'Starting local speech services...',
+  'Preparing media inspection...',
+  'Checking transcription models...',
+  'Connecting task progress...',
+  'Preparing audio normalization...',
+  'Checking FFmpeg tools...',
+  'Restoring active jobs...',
+  'Connecting model cache...',
+  'Preparing GPU acceleration...',
+  'Loading transcription workspace...',
 ];
-
 function App() {
   useThemeSync();
 
@@ -136,7 +125,7 @@ function MainApp() {
     if (!platform.metadata.isTauri) {
       const serverUrl = getDefaultServerUrl();
       const currentServerUrl = useServerStore.getState().serverUrl;
-      if (currentServerUrl !== serverUrl && isLoopbackVoiceboxServerUrl(currentServerUrl)) {
+      if (currentServerUrl !== serverUrl && isLoopbackDiarixServerUrl(currentServerUrl)) {
         useServerStore.getState().setServerUrl(serverUrl);
       }
       setServerReady(true); // Web assumes server is running
@@ -152,10 +141,15 @@ function MainApp() {
     // Only auto-start server in production mode
     // In dev mode, user runs server separately
     if (!import.meta.env?.PROD) {
+      const serverUrl = getDefaultServerUrl();
+      const currentServerUrl = useServerStore.getState().serverUrl;
+      if (currentServerUrl !== serverUrl && isLoopbackDiarixServerUrl(currentServerUrl)) {
+        useServerStore.getState().setServerUrl(serverUrl);
+      }
       console.log('Dev mode: Skipping auto-start of server (run it separately)');
       setServerReady(true); // Mark as ready so UI doesn't show loading screen
       // Mark that server was not started by app (so we don't try to stop it on close)
-      window.__voiceboxServerStartedByApp = false;
+      window.__diarixServerStartedByApp = false;
       return;
     }
 
@@ -177,12 +171,12 @@ function MainApp() {
         useServerStore.getState().setServerUrl(serverUrl);
         setServerReady(true);
         // Mark that we started the server (so we know to stop it on close)
-        window.__voiceboxServerStartedByApp = true;
+        window.__diarixServerStartedByApp = true;
       })
       .catch((error) => {
         console.error('Failed to auto-start server:', error);
         serverStartingRef.current = false;
-        window.__voiceboxServerStartedByApp = false;
+        window.__diarixServerStartedByApp = false;
 
         // Only fall back to health-check polling when the error indicates the
         // port is occupied (likely an external server). For real failures
@@ -202,11 +196,11 @@ function MainApp() {
         const pollInterval = setInterval(async () => {
           try {
             const health = await apiClient.getHealth();
-            if (!isVoiceboxHealthResponse(health)) {
-              console.log('Health response is not from a Voicebox server, keep polling...');
+            if (!isDiarixHealthResponse(health)) {
+              console.log('Health response is not from a Diarix-compatible server, keep polling...');
               return;
             }
-            console.log('External Voicebox server detected via health check');
+            console.log('External Diarix-compatible server detected via health check');
             clearInterval(pollInterval);
             setServerReady(true);
           } catch {
@@ -219,7 +213,7 @@ function MainApp() {
           clearInterval(pollInterval);
           serverStartingRef.current = false;
           setStartupError(
-            'Could not connect to a Voicebox server within 2 minutes. ' +
+            'Could not connect to a Diarix-compatible server within 2 minutes. ' +
               'Please check that the server is running and try again.',
           );
         }, 120_000);
@@ -259,14 +253,11 @@ function MainApp() {
       >
         <TitleBarDragRegion />
         <div className="text-center space-y-6">
-          <div className="flex justify-center relative">
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-48 h-48 rounded-full bg-accent/20 blur-3xl" />
-            </div>
+          <div className="flex justify-center">
             <img
-              src={voiceboxLogo}
-              alt="Voicebox"
-              className="w-48 h-48 object-contain animate-fade-in-scale relative z-10"
+              src={diarixLogo}
+              alt="Diarix"
+              className="diarix-logo w-48 h-48 object-contain animate-fade-in-scale"
             />
           </div>
           {startupError ? (

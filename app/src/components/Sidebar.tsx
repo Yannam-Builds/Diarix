@@ -1,8 +1,18 @@
 import { Link, useMatchRoute } from '@tanstack/react-router';
-import { AudioLines, Box, Captions, type LucideIcon, Mic, Settings, Volume2, Wand2 } from 'lucide-react';
+import {
+  AudioLines,
+  Box,
+  Captions,
+  History as HistoryIcon,
+  type LucideIcon,
+  Mic,
+  Settings,
+  Volume2,
+  Wand2,
+} from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import voiceboxLogo from '@/assets/voicebox-logo.png';
+import diarixLogo from '@/assets/diarix-logo.png';
 import { cn } from '@/lib/utils/cn';
 import { usePlatform } from '@/platform/PlatformContext';
 import type { UpdateStatus } from '@/platform/types';
@@ -20,12 +30,13 @@ const tabs: Array<{
   labelKey?: string;
   label?: string;
 }> = [
-  { id: 'main', path: '/', icon: Volume2, labelKey: 'nav.generate' },
+  { id: 'transcribe', path: '/', icon: Captions, labelKey: 'nav.transcribe' },
+  { id: 'voice-studio', path: '/voice-studio', icon: Volume2, labelKey: 'nav.voiceStudio' },
+  { id: 'profiles', path: '/profiles', icon: Mic, labelKey: 'nav.profiles' },
   { id: 'stories', path: '/stories', icon: AudioLines, labelKey: 'nav.stories' },
-  { id: 'captures', path: '/captures', icon: Captions, labelKey: 'nav.captures' },
-  { id: 'voices', path: '/voices', icon: Mic, labelKey: 'nav.voices' },
   { id: 'effects', path: '/effects', icon: Wand2, labelKey: 'nav.effects' },
   { id: 'models', path: '/models', icon: Box, labelKey: 'nav.models' },
+  { id: 'history', path: '/history', icon: HistoryIcon, labelKey: 'nav.history' },
   { id: 'settings', path: '/settings', icon: Settings, labelKey: 'nav.settings' },
 ];
 
@@ -47,11 +58,15 @@ export function Sidebar({ isMacOS }: SidebarProps) {
     >
       {/* Logo */}
       <div className="mb-2">
-        <img src={voiceboxLogo} alt="Voicebox" className="sidebar-logo w-12 h-12 object-contain" />
+        <img
+          src={diarixLogo}
+          alt="Diarix"
+          className="diarix-logo sidebar-logo w-12 h-12 object-contain"
+        />
       </div>
 
       {/* Navigation Buttons */}
-      <div className="flex flex-col gap-3">
+      <nav className="flex min-h-0 flex-col gap-2" aria-label="Primary navigation">
         {tabs.map((tab, index) => {
           const Icon = tab.icon;
           const isActive =
@@ -89,7 +104,7 @@ export function Sidebar({ isMacOS }: SidebarProps) {
             </Link>
           );
         })}
-      </div>
+      </nav>
 
       {/* Version */}
       <div

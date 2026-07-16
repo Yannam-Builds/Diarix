@@ -1,11 +1,11 @@
 ---
 title: "Transcription"
-description: "How Whisper-based audio transcription works in Voicebox"
+description: "How Whisper-based audio transcription works in Diarix"
 ---
 
 ## Overview
 
-Voicebox uses OpenAI's Whisper for automatic speech recognition (ASR). Transcription powers two flows:
+Diarix uses OpenAI's Whisper for automatic speech recognition (ASR). Transcription powers two flows:
 
 1. **Reference-text auto-fill** — when a user records or uploads a voice sample, the backend transcribes it and populates the `reference_text` field so cloning can use it.
 2. **On-demand transcription** — a user-facing `/transcribe` endpoint for arbitrary audio.
@@ -83,7 +83,7 @@ Whisper expects mono 16 kHz audio. The audio utility in `backend/utils/audio.py`
 - **Formats:** WAV, MP3, FLAC, OGG, M4A (via soundfile / librosa)
 - **Target:** mono, 16 kHz, float32
 
-Files longer than Whisper's 30-second window are handled by the underlying library's chunking logic — no explicit splitting in Voicebox code.
+Files longer than Whisper's 30-second window are handled by the underlying library's chunking logic — no explicit splitting in Diarix code.
 
 ## API Endpoints
 

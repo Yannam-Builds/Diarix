@@ -1,4 +1,5 @@
 import { Check, ChevronDown, FolderOpen, Info, Keyboard, Laptop, Lock, Volume2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccessibilityNotice } from '@/components/AccessibilityGate/AccessibilityGate';
@@ -22,8 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Toggle } from '@/components/ui/toggle';
 import { useToast } from '@/components/ui/use-toast';
+import { apiClient } from '@/lib/api/client';
 import { useDictationReadiness } from '@/lib/hooks/useDictationReadiness';
 import { useCaptureSettings } from '@/lib/hooks/useSettings';
 import { useProfiles } from '@/lib/hooks/useProfiles';
@@ -31,7 +34,7 @@ import { usePlatform } from '@/platform/PlatformContext';
 import { useServerStore } from '@/stores/serverStore';
 import { cn } from '@/lib/utils/cn';
 import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
-import type { Qwen3ModelSize, VoiceProfileResponse, WhisperModelSize } from '@/lib/api/types';
+import type { Qwen3ModelSize, VoiceProfileResponse } from '@/lib/api/types';
 import { SettingRow, SettingSection } from './SettingRow';
 
 function ChordPreview({ keys }: { keys: string[] }) {
@@ -128,7 +131,17 @@ export function CapturesPage() {
   const { data: profiles } = useProfiles();
   const { toast } = useToast();
   const readiness = useDictationReadiness();
-  const sttModel = settings?.stt_model ?? 'turbo';
+  const { data: modelStatus } = useQuery({
+    queryKey: ['modelCatalog'],
+    queryFn: () => apiClient.getModelCatalog(),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  const transcriptionModels = modelStatus?.models.filter((model) => model.modality === 'stt') ?? [];
+  const sttModel = settings?.stt_model ?? 'whisper-turbo';
+  const selectedSttModel =
+    transcriptionModels.find(
+      (model) => model.model_name === sttModel || model.model_size === sttModel,
+    )?.model_name ?? sttModel;
   const language = settings?.language ?? 'auto';
   const autoRefine = settings?.auto_refine ?? true;
   const llmModel = settings?.llm_model ?? '0.6B';
@@ -144,6 +157,14 @@ export function CapturesPage() {
   const [chordEditor, setChordEditor] = useState<'push' | 'toggle' | null>(null);
   const [opening, setOpening] = useState(false);
   const [capturesPath, setCapturesPath] = useState<string | null>(null);
+
+  // Local draft so typing doesn't fire a settings PATCH per keystroke —
+  // persisted on blur, re-seeded when the server value changes elsewhere.
+  const savedCustomInstructions = settings?.custom_instructions ?? '';
+  const [customInstructionsDraft, setCustomInstructionsDraft] = useState(savedCustomInstructions);
+  useEffect(() => {
+    setCustomInstructionsDraft(savedCustomInstructions);
+  }, [savedCustomInstructions]);
 
   useEffect(() => {
     fetch(`${serverUrl}/health/filesystem`)
@@ -317,28 +338,19 @@ export function CapturesPage() {
           description={t('settings.captures.transcription.model.description')}
           action={
             <Select
-              value={sttModel}
-              onValueChange={(v) => update({ stt_model: v as WhisperModelSize })}
+              value={selectedSttModel}
+              onValueChange={(v) => update({ stt_model: v })}
             >
               <SelectTrigger className="w-[300px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="base">
-                  {t('settings.captures.transcription.model.base', { tail: t('settings.captures.transcription.model.tail.fast') })}
-                </SelectItem>
-                <SelectItem value="small">
-                  {t('settings.captures.transcription.model.small', { tail: t('settings.captures.transcription.model.tail.balanced') })}
-                </SelectItem>
-                <SelectItem value="medium">
-                  {t('settings.captures.transcription.model.medium', { tail: t('settings.captures.transcription.model.tail.higher') })}
-                </SelectItem>
-                <SelectItem value="large">
-                  {t('settings.captures.transcription.model.large', { tail: t('settings.captures.transcription.model.tail.best') })}
-                </SelectItem>
-                <SelectItem value="turbo">
-                  {t('settings.captures.transcription.model.turbo', { tail: t('settings.captures.transcription.model.tail.nearBest') })}
-                </SelectItem>
+                {transcriptionModels.map((model) => (
+                  <SelectItem key={model.model_name} value={model.model_name}>
+                    {model.display_name}
+                    {model.runtime_group !== 'core' ? ' · Advanced' : ''}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           }
@@ -453,6 +465,33 @@ export function CapturesPage() {
             />
           }
         />
+
+        <div className="space-y-2 pt-1">
+          <div>
+            <p className="text-sm font-medium">
+              {t('settings.captures.refinement.customInstructions.title')}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t('settings.captures.refinement.customInstructions.description')}
+            </p>
+          </div>
+          <Textarea
+            id="customInstructions"
+            value={customInstructionsDraft}
+            maxLength={500}
+            rows={3}
+            placeholder={t('settings.captures.refinement.customInstructions.placeholder')}
+            onChange={(event) => setCustomInstructionsDraft(event.target.value)}
+            onBlur={() => {
+              const trimmed = customInstructionsDraft.trim();
+              if (trimmed !== savedCustomInstructions.trim()) {
+                update({ custom_instructions: trimmed || null });
+              }
+            }}
+            disabled={!autoRefine}
+            className="max-w-xl text-sm"
+          />
+        </div>
       </SettingSection>
 
       <SettingSection

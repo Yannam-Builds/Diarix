@@ -11,13 +11,15 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ..database import CaptureSettings as DBCaptureSettings
-from ..database import GenerationSettings as DBGenerationSettings
+from ..database import (
+    CaptureSettings as DBCaptureSettings,
+    GenerationSettings as DBGenerationSettings,
+    ResourceSettings as DBResourceSettings,
+)
 from ..utils.capture_chords import (
     default_push_to_talk_chord,
     default_toggle_to_talk_chord,
 )
-
 
 SINGLETON_ID = 1
 
@@ -40,6 +42,16 @@ def _get_or_create_generation_row(db: Session) -> DBGenerationSettings:
     row = db.query(DBGenerationSettings).filter(DBGenerationSettings.id == SINGLETON_ID).first()
     if row is None:
         row = DBGenerationSettings(id=SINGLETON_ID)
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+    return row
+
+
+def _get_or_create_resource_row(db: Session) -> DBResourceSettings:
+    row = db.query(DBResourceSettings).filter(DBResourceSettings.id == SINGLETON_ID).first()
+    if row is None:
+        row = DBResourceSettings(id=SINGLETON_ID)
         db.add(row)
         db.commit()
         db.refresh(row)
@@ -87,4 +99,19 @@ def update_generation_settings(db: Session, patch: dict[str, Any]) -> DBGenerati
     _apply_patch(row, patch)
     db.commit()
     db.refresh(row)
+    return row
+
+
+def get_resource_settings(db: Session) -> DBResourceSettings:
+    return _get_or_create_resource_row(db)
+
+
+def update_resource_settings(db: Session, patch: dict[str, Any]) -> DBResourceSettings:
+    row = _get_or_create_resource_row(db)
+    _apply_patch(row, patch)
+    db.commit()
+    db.refresh(row)
+    from .resource_limits import apply_resource_limits
+
+    apply_resource_limits(row.limits_enabled, row.cpu_percent, row.vram_percent)
     return row

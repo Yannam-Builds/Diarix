@@ -5,13 +5,13 @@ description: "Let Claude Code, Cursor, Cline, or any MCP-aware agent speak in on
 
 ## Overview
 
-Voicebox ships a built-in **Model Context Protocol** server so local AI
-agents can call your Voicebox install directly: speak text in a voice
+Diarix ships a built-in **Model Context Protocol** server so local AI
+agents can call your Diarix install directly: speak text in a voice
 profile, transcribe audio, and list captures or profiles. The server runs
-inside the same process as the rest of Voicebox and is mounted at `/mcp`
+inside the same process as the rest of Diarix and is mounted at `/mcp`
 over Streamable HTTP.
 
-Agent asks to speak → Voicebox plays audio on your speakers → an on-screen
+Agent asks to speak → Diarix plays audio on your speakers → an on-screen
 pill surfaces the voice name for the whole duration so you always see what's
 coming out of your machine.
 
@@ -50,7 +50,7 @@ Drop this into the client's MCP config (usually `.mcp.json` or a Settings UI):
 ```
 
 Change `cursor` to whatever name you want the binding to show up as in
-Voicebox → Settings → MCP. The value is just an identifier for the
+Diarix → Settings → MCP. The value is just an identifier for the
 per-client voice binding — not a secret, not a credential.
 
 ### Clients that only speak stdio
@@ -64,7 +64,7 @@ the client at that binary's absolute path:
   {
     "mcpServers": {
       "voicebox": {
-        "command": "/Applications/Voicebox.app/Contents/MacOS/voicebox-mcp",
+        "command": "/Applications/Diarix.app/Contents/MacOS/voicebox-mcp",
         "env": { "VOICEBOX_CLIENT_ID": "claude-desktop" }
       }
     }
@@ -76,7 +76,7 @@ the client at that binary's absolute path:
   {
     "mcpServers": {
       "voicebox": {
-        "command": "C:\\Program Files\\Voicebox\\voicebox-mcp.exe",
+        "command": "C:\\Program Files\\Diarix\\voicebox-mcp.exe",
         "env": { "VOICEBOX_CLIENT_ID": "claude-desktop" }
       }
     }
@@ -97,8 +97,8 @@ the client at that binary's absolute path:
   </Tab>
 </Tabs>
 
-The shim waits up to 30 seconds for the Voicebox backend to come up, then
-proxies JSON-RPC from stdio over Streamable HTTP. Voicebox must be running
+The shim waits up to 30 seconds for the Diarix backend to come up, then
+proxies JSON-RPC from stdio over Streamable HTTP. Diarix must be running
 for the shim to connect.
 
 ## Tools
@@ -172,7 +172,7 @@ in this order:
   </Step>
   <Step title="Per-client binding">
     Looked up by the `X-Voicebox-Client-Id` header. Managed in
-    **Voicebox → Settings → MCP**. Lets you pin Claude Code to Morgan,
+    **Diarix → Settings → MCP**. Lets you pin Claude Code to Morgan,
     Cursor to Scarlett, etc.
   </Step>
   <Step title="Global default">
@@ -186,7 +186,7 @@ pointing at Settings.
 
 ## Per-client bindings
 
-Voicebox → Settings → MCP shows one row per `client_id` Voicebox has heard
+Diarix → Settings → MCP shows one row per `client_id` Diarix has heard
 from, plus the config snippets you can copy into each agent. Each row
 carries:
 
@@ -206,7 +206,7 @@ request — useful when you're not sure whether your config took.
 Every agent-initiated speak surfaces the floating pill the same way
 [Dictation](/overview/dictation) does, in a new `Speaking` state showing the
 profile name and an elapsed timer. The pill is intentionally unmissable —
-silent background TTS is a trust hazard, so Voicebox always shows what's
+silent background TTS is a trust hazard, so Diarix always shows what's
 being spoken and in what voice.
 
 Behind the scenes, the backend broadcasts `speak-start` and `speak-end`
@@ -245,7 +245,7 @@ generation land in the Captures tab.
 
 <Callout type="info">
   If an agent can't reach the server, the first thing to check is that
-  Voicebox is running — the backend only listens while the desktop app is
+  Diarix is running — the backend only listens while the desktop app is
   open. The stdio shim surfaces this as a JSON-RPC error on the client
   side after its 30-second health-wait window elapses.
 </Callout>
@@ -253,10 +253,10 @@ generation land in the Captures tab.
 ## Security
 
 - **Localhost only.** The server binds to `127.0.0.1`. If you ever point
-  Voicebox at a non-loopback interface (e.g. remote-mode over a trusted
+  Diarix at a non-loopback interface (e.g. remote-mode over a trusted
   network), add a bearer token — it's on the roadmap but not in 0.5.0.
 - **No auth today.** Any process that can connect to your loopback can
-  call MCP. That's the same trust boundary as the rest of Voicebox's REST
+  call MCP. That's the same trust boundary as the rest of Diarix's REST
   API and is appropriate for a single-user local tool.
 - **`audio_path` reads are unrestricted** against the same trust
   boundary. If you're scripting against a shared host, prefer
@@ -275,7 +275,7 @@ generation land in the Captures tab.
 - **Dependencies:** `fastmcp>=3.0,<4.0`, `sse-starlette>=2.0`.
 - **Lifespan:** mounting FastMCP requires the `lifespan=` kwarg on
   `FastAPI()` — the startup/shutdown event decorators are incompatible
-  with FastMCP's Streamable HTTP session manager. The Voicebox app.py
+  with FastMCP's Streamable HTTP session manager. The Diarix app.py
   composes both into one async context manager.
 
 For the full developer-facing tour of the code layout, see

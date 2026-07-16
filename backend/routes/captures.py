@@ -1,17 +1,19 @@
 """Capture (voice input) endpoints."""
 
 import logging
+import mimetypes
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from .. import config, models
-from ..backends import get_llm_model_configs, get_stt_model_configs
+from ..backends import get_llm_model_configs, resolve_stt_config
 from ..backends.base import is_model_cached
 from ..database import Capture as DBCapture, get_db
 from ..services import captures as captures_service
 from ..services import settings as settings_service
+from ..services.media_ingestion import MediaIngestionError
 from ..services.refinement import RefinementFlags
 
 logger = logging.getLogger(__name__)
@@ -54,7 +56,7 @@ async def create_capture_endpoint(
             stt_model=resolved_stt,
             db=db,
         )
-    except ValueError as e:
+    except (ValueError, MediaIngestionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Failed to create capture")
@@ -71,14 +73,19 @@ async def create_capture_endpoint(
 async def list_captures_endpoint(
     limit: int = 50,
     offset: int = 0,
+    search: str | None = None,
     db: Session = Depends(get_db),
 ):
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 200")
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if search is not None and len(search) > 200:
+        raise HTTPException(status_code=400, detail="search must be 200 characters or fewer")
 
-    items, total = captures_service.list_captures(db, limit=limit, offset=offset)
+    items, total = captures_service.list_captures(
+        db, limit=limit, offset=offset, search=search
+    )
     return models.CaptureListResponse(items=items, total=total)
 
 
@@ -103,8 +110,8 @@ async def get_capture_audio_endpoint(capture_id: str, db: Session = Depends(get_
 
     return FileResponse(
         audio_path,
-        media_type="audio/wav",
-        filename=f"capture_{capture_id}.wav",
+        media_type=mimetypes.guess_type(audio_path.name)[0] or "application/octet-stream",
+        filename=(audio_path.name.split("__", 1)[1] if "__" in audio_path.name else audio_path.name),
     )
 
 
@@ -128,12 +135,14 @@ async def refine_capture_endpoint(
             smart_cleanup=request.flags.smart_cleanup,
             self_correction=request.flags.self_correction,
             preserve_technical=request.flags.preserve_technical,
+            custom_instructions=request.flags.custom_instructions,
         )
     else:
         flags = RefinementFlags(
             smart_cleanup=saved.smart_cleanup,
             self_correction=saved.self_correction,
             preserve_technical=saved.preserve_technical,
+            custom_instructions=saved.custom_instructions,
         )
 
     resolved_model = request.model_size or saved.llm_model
@@ -165,10 +174,10 @@ async def capture_readiness_endpoint(db: Session = Depends(get_db)):
     """
     saved = settings_service.get_capture_settings(db)
 
-    stt_cfg = next(
-        (c for c in get_stt_model_configs() if c.model_size == saved.stt_model),
-        None,
-    )
+    try:
+        stt_cfg = resolve_stt_config(saved.stt_model)
+    except ValueError:
+        stt_cfg = None
     llm_cfg = next(
         (c for c in get_llm_model_configs() if c.model_size == saved.llm_model),
         None,

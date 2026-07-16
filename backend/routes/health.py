@@ -29,7 +29,7 @@ async def root():
     index = _frontend_dir / "index.html"
     if index.is_file():
         return FileResponse(index, media_type="text/html")
-    return {"message": "voicebox API", "version": __version__}
+    return {"message": "Diarix API", "version": __version__}
 
 
 @router.post("/shutdown")

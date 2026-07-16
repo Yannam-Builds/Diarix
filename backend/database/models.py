@@ -195,13 +195,16 @@ class CaptureSettings(Base):
     __tablename__ = "capture_settings"
 
     id = Column(Integer, primary_key=True, default=1)
-    stt_model = Column(String, nullable=False, default="turbo")
+    stt_model = Column(String, nullable=False, default="whisper-turbo")
     language = Column(String, nullable=False, default="auto")
     auto_refine = Column(Boolean, nullable=False, default=True)
     llm_model = Column(String, nullable=False, default="0.6B")
     smart_cleanup = Column(Boolean, nullable=False, default=True)
     self_correction = Column(Boolean, nullable=False, default=True)
     preserve_technical = Column(Boolean, nullable=False, default=True)
+    # Optional free-text preferences appended to the refinement prompt as
+    # quoted transformation preferences (never a new system role).
+    custom_instructions = Column(Text, nullable=True)
     allow_auto_paste = Column(Boolean, nullable=False, default=True)
     default_playback_voice_id = Column(String, nullable=True)
     # Default OFF — opting in is what triggers the macOS Input Monitoring TCC
@@ -231,6 +234,18 @@ class GenerationSettings(Base):
     crossfade_ms = Column(Integer, nullable=False, default=50)
     normalize_audio = Column(Boolean, nullable=False, default=True)
     autoplay_on_generate = Column(Boolean, nullable=False, default=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class ResourceSettings(Base):
+    """Singleton inference resource guard shared by all local clients."""
+
+    __tablename__ = "resource_settings"
+
+    id = Column(Integer, primary_key=True, default=1)
+    limits_enabled = Column(Boolean, nullable=False, default=True)
+    cpu_percent = Column(Integer, nullable=False, default=80)
+    vram_percent = Column(Integer, nullable=False, default=80)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 

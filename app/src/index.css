@@ -157,6 +157,14 @@
   opacity: 0;
 }
 
+.diarix-logo {
+  filter: brightness(0);
+}
+
+.dark .diarix-logo {
+  filter: none;
+}
+
 .dark .sidebar-logo {
   filter: drop-shadow(0 0 6px hsl(var(--accent) / 0.5))
     drop-shadow(0 0 14px hsl(var(--accent) / 0.35)) drop-shadow(0 0 28px hsl(var(--accent) / 0.2));
@@ -175,4 +183,25 @@
 .loader-hidden > div > div {
   animation-play-state: paused !important;
   background-color: hsl(var(--muted-foreground)) !important;
+}
+
+@keyframes diarix-progress-indeterminate {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+.diarix-progress-indeterminate {
+  width: 35%;
+  animation: diarix-progress-indeterminate 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diarix-progress-indeterminate {
+    animation: none;
+    transform: translateX(92%);
+  }
 }

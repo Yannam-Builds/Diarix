@@ -168,6 +168,54 @@ class _DynamoMetaPathFinder:
         return ModuleSpec(fullname, _DynamoLoader(), is_package=True)
 
 
+def _noop_torch_compile(model=None, *args, **kwargs):
+    """Return the callable unchanged for decorator and direct-call forms."""
+    if model is None:
+        return lambda fn: fn
+    return model
+
+
+class _TorchCompilePatchingLoader:
+    """Patch torch.compile immediately after the real torch package loads."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def create_module(self, spec):
+        return self._inner.create_module(spec)
+
+    def exec_module(self, module):
+        self._inner.exec_module(module)
+        module.compile = _noop_torch_compile
+        _diag("patched torch.compile to inference-safe no-op")
+
+
+class _TorchCompilePatchingFinder:
+    """Wrap the frozen torch loader without eagerly importing torch."""
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname != "torch":
+            return None
+        for finder in sys.meta_path:
+            if finder is self:
+                continue
+            find = getattr(finder, "find_spec", None)
+            if find is None:
+                continue
+            try:
+                real_spec = find(fullname, path, target)
+            except Exception:
+                continue
+            if real_spec is None or real_spec.loader is None:
+                continue
+            real_spec.loader = _TorchCompilePatchingLoader(real_spec.loader)
+            return real_spec
+        return None
+
+
 class _TransformersStubFinder:
     """Replace specific transformers submodules with no-op stubs.
 
@@ -496,6 +544,7 @@ def _install_dynamo_stub() -> None:
     #  - scipy.stats._distn_infrastructure -> real load with `obj` pre-bound,
     #    so librosa -> scipy.signal -> scipy.stats loads cleanly
     for _FinderCls in (
+        _TorchCompilePatchingFinder,
         _DynamoMetaPathFinder,
         _TransformersStubFinder,
         _ScipyDistnPatchingFinder,

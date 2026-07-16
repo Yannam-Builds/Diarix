@@ -4,17 +4,192 @@ PyInstaller build script for creating standalone Python server binary.
 Usage:
     python build_binary.py           # Build default (CPU) server binary
     python build_binary.py --cuda    # Build CUDA-enabled server binary
+    python build_binary.py --require-media-tools  # Release build with FFmpeg/FFprobe
 """
 
-import PyInstaller.__main__
 import argparse
 import logging
 import os
 import platform
+import shutil
 import sys
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable, Mapping
 
 logger = logging.getLogger(__name__)
+
+NAGISA_PYINSTALLER_ARGS = [
+    "--collect-all",
+    "nagisa",
+    "--copy-metadata",
+    "nagisa",
+]
+
+
+class MediaToolPackagingError(RuntimeError):
+    """Raised when FFmpeg/FFprobe cannot be packaged safely."""
+
+
+@dataclass(frozen=True)
+class MediaToolPaths:
+    """Resolved paths for the two media executables shipped with the server."""
+
+    ffmpeg: Path
+    ffprobe: Path
+
+
+def _canonical_media_tool_name(tool: str, system_name: str | None = None) -> str:
+    """Return the runtime filename expected under ``sys._MEIPASS/tools``."""
+    system_name = system_name or platform.system()
+    suffix = ".exe" if system_name == "Windows" else ""
+    return f"{tool}{suffix}"
+
+
+def _tool_names_to_try(tool: str, system_name: str) -> tuple[str, ...]:
+    canonical = _canonical_media_tool_name(tool, system_name)
+    if canonical == tool:
+        return (tool,)
+    return (canonical, tool)
+
+
+def _resolve_explicit_media_binary(
+    value: str,
+    *,
+    env_var: str,
+    search_path: str,
+    which: Callable[..., str | None],
+) -> Path:
+    """Resolve an explicit binary path or command without silently falling back."""
+    expanded = Path(os.path.expandvars(os.path.expanduser(value)))
+    if expanded.is_file():
+        return expanded.resolve()
+
+    found = which(value, path=search_path)
+    if found:
+        return Path(found).resolve()
+
+    raise MediaToolPackagingError(
+        f"{env_var} is set to {value!r}, but it is neither an existing file "
+        "nor a command available on PATH."
+    )
+
+
+def resolve_media_tools(
+    *,
+    env: Mapping[str, str] | None = None,
+    require: bool = False,
+    system_name: str | None = None,
+    which: Callable[..., str | None] = shutil.which,
+) -> MediaToolPaths | None:
+    """Resolve FFmpeg and FFprobe for a server build.
+
+    Resolution precedence for each tool is its explicit binary environment
+    variable, ``DIARIX_FFMPEG_DIR``, then ``PATH``. Explicit settings are
+    authoritative: a bad path is a packaging error instead of silently using
+    a different installation.
+    """
+    env = os.environ if env is None else env
+    system_name = system_name or platform.system()
+    search_path = env.get("PATH", "")
+
+    explicit_vars = {
+        "ffmpeg": "FFMPEG_BINARY",
+        "ffprobe": "FFPROBE_BINARY",
+    }
+    tool_dir = None
+    tool_dir_value = env.get("DIARIX_FFMPEG_DIR")
+    needs_tool_dir = tool_dir_value and any(not env.get(env_var) for env_var in explicit_vars.values())
+    if needs_tool_dir:
+        tool_dir = Path(os.path.expandvars(os.path.expanduser(tool_dir_value))).resolve()
+        if not tool_dir.is_dir():
+            raise MediaToolPackagingError(
+                f"DIARIX_FFMPEG_DIR is set to {tool_dir_value!r}, but that directory does not exist."
+            )
+
+    resolved: dict[str, Path] = {}
+    missing: list[str] = []
+
+    for tool, env_var in explicit_vars.items():
+        explicit_value = env.get(env_var)
+        if explicit_value:
+            resolved[tool] = _resolve_explicit_media_binary(
+                explicit_value,
+                env_var=env_var,
+                search_path=search_path,
+                which=which,
+            )
+            continue
+
+        if tool_dir is not None:
+            candidate = next(
+                (tool_dir / name for name in _tool_names_to_try(tool, system_name) if (tool_dir / name).is_file()),
+                None,
+            )
+            if candidate is None:
+                expected = ", ".join(_tool_names_to_try(tool, system_name))
+                raise MediaToolPackagingError(
+                    f"DIARIX_FFMPEG_DIR={str(tool_dir)!r} does not contain {expected}."
+                )
+            resolved[tool] = candidate.resolve()
+            continue
+
+        found = None
+        for command in _tool_names_to_try(tool, system_name):
+            found = which(command, path=search_path)
+            if found:
+                break
+        if found:
+            resolved[tool] = Path(found).resolve()
+        else:
+            missing.append(tool)
+
+    if missing:
+        message = (
+            "FFmpeg media tools are unavailable for packaging: missing "
+            f"{', '.join(missing)}. Set DIARIX_FFMPEG_DIR to a directory containing both tools, "
+            "set FFMPEG_BINARY and FFPROBE_BINARY explicitly, or make both commands available on PATH."
+        )
+        if require:
+            raise MediaToolPackagingError(f"{message} Release builds require both tools.")
+        logger.warning("%s The server will be built without bundled media tools.", message)
+        return None
+
+    return MediaToolPaths(ffmpeg=resolved["ffmpeg"], ffprobe=resolved["ffprobe"])
+
+
+def stage_media_tools(
+    media_tools: MediaToolPaths,
+    staging_dir: Path,
+    *,
+    system_name: str | None = None,
+) -> MediaToolPaths:
+    """Copy tools to canonical filenames before handing them to PyInstaller."""
+    staging_dir.mkdir(parents=True, exist_ok=True)
+    staged = {}
+    for tool, source in (("ffmpeg", media_tools.ffmpeg), ("ffprobe", media_tools.ffprobe)):
+        destination = staging_dir / _canonical_media_tool_name(tool, system_name)
+        shutil.copy2(source, destination)
+        staged[tool] = destination
+    return MediaToolPaths(ffmpeg=staged["ffmpeg"], ffprobe=staged["ffprobe"])
+
+
+def media_tool_pyinstaller_args(media_tools: MediaToolPaths) -> list[str]:
+    """Build deterministic PyInstaller args for ``sys._MEIPASS/tools``."""
+    return [
+        "--add-binary",
+        f"{media_tools.ffmpeg}{os.pathsep}tools",
+        "--add-binary",
+        f"{media_tools.ffprobe}{os.pathsep}tools",
+    ]
+
+
+def _run_pyinstaller(args: list[str]) -> None:
+    """Import PyInstaller only for an actual build so resolver tests stay pure."""
+    import PyInstaller.__main__
+
+    PyInstaller.__main__.run(args)
 
 
 def is_apple_silicon():
@@ -22,26 +197,29 @@ def is_apple_silicon():
     return platform.system() == "Darwin" and platform.machine() == "arm64"
 
 
-def build_server(cuda=False, rocm=False):
+def build_server(cuda=False, rocm=False, require_media_tools=False):
     """Build Python server as standalone binary.
 
     Args:
         cuda: If True, build with CUDA support and name the binary
-              voicebox-server-cuda instead of voicebox-server.
+              diarix-server-cuda instead of diarix-server.
         rocm: If True, build with ROCm support and name the binary
-              voicebox-server-rocm instead of voicebox-server.
+              diarix-server-rocm instead of diarix-server.
+        require_media_tools: If True, fail unless both FFmpeg and FFprobe
+              can be bundled into the server.
     """
     if cuda and rocm:
         raise ValueError("Cannot build with both CUDA and ROCm support")
 
     backend_dir = Path(__file__).parent
+    media_tools = resolve_media_tools(require=require_media_tools)
 
     if rocm:
-        binary_name = "voicebox-server-rocm"
+        binary_name = "diarix-server-rocm"
     elif cuda:
-        binary_name = "voicebox-server-cuda"
+        binary_name = "diarix-server-cuda"
     else:
-        binary_name = "voicebox-server"
+        binary_name = "diarix-server"
 
     # PyInstaller arguments
     # CUDA and ROCm builds use --onedir so we can split the output into two archives:
@@ -119,6 +297,18 @@ def build_server(cuda=False, rocm=False):
             "--hidden-import",
             "backend.backends.pytorch_backend",
             "--hidden-import",
+            "backend.backends.stt",
+            "--hidden-import",
+            "backend.backends.stt.common",
+            "--hidden-import",
+            "backend.backends.stt.whisperx_backend",
+            "--hidden-import",
+            "backend.backends.stt.transformers_backend",
+            "--hidden-import",
+            "backend.backends.stt.nemo_backend",
+            "--hidden-import",
+            "backend.backends.stt.qwen_backend",
+            "--hidden-import",
             "backend.backends.qwen_custom_voice_backend",
             "--hidden-import",
             "backend.utils.audio",
@@ -136,6 +326,10 @@ def build_server(cuda=False, rocm=False):
             "backend.utils.effects",
             "--hidden-import",
             "backend.services.versions",
+            "--hidden-import",
+            "backend.services.resource_limits",
+            "--hidden-import",
+            "backend.runtime_self_test",
             "--hidden-import",
             "pedalboard",
             "--hidden-import",
@@ -201,6 +395,11 @@ def build_server(cuda=False, rocm=False):
             "requests",
             "--copy-metadata",
             "transformers",
+            # Transformers 4.57 checks torchcodec's installed version while
+            # importing Whisper, even though Diarix loads normalized PCM
+            # directly and never invokes TorchCodec for transcription.
+            "--copy-metadata",
+            "torchcodec",
             "--copy-metadata",
             "huggingface-hub",
             "--copy-metadata",
@@ -344,6 +543,38 @@ def build_server(cuda=False, rocm=False):
                 [
                     "--hidden-import",
                     "torch.backends.cudnn",
+                    "--collect-all",
+                    "whisperx",
+                    "--collect-all",
+                    "faster_whisper",
+                    "--collect-all",
+                    "nemo",
+                    # pytorch-lightning imports lightning_fabric through NeMo;
+                    # its __version__ module reads version.info from disk.
+                    "--collect-all",
+                    "lightning_fabric",
+                    # NeMo imports CUDA Python's compiled helpers dynamically.
+                    # Collect the package so cydriver/cyruntime survive freezing.
+                    "--collect-all",
+                    "cuda.bindings",
+                    "--hidden-import",
+                    "cuda.bindings.cydriver",
+                    "--hidden-import",
+                    "cuda.bindings.cyruntime",
+                    "--collect-all",
+                    "qwen_asr",
+                    # qwen-asr imports Nagisa's forced aligner at module load.
+                    # Nagisa 0.2.x relies on sibling modules being available as
+                    # physical source files; hook-nagisa.py selects that mode.
+                    *NAGISA_PYINSTALLER_ARGS,
+                    "--copy-metadata",
+                    "whisperx",
+                    "--copy-metadata",
+                    "faster-whisper",
+                    "--copy-metadata",
+                    "nemo_toolkit",
+                    "--copy-metadata",
+                    "qwen-asr",
                 ]
             )
         args.extend(gpu_hidden)
@@ -478,6 +709,17 @@ def build_server(cuda=False, rocm=False):
         ]
     )
 
+    media_tools_staging = None
+    if media_tools is not None:
+        media_tools_staging = tempfile.TemporaryDirectory(prefix="diarix-media-tools-")
+        staged_media_tools = stage_media_tools(media_tools, Path(media_tools_staging.name))
+        args.extend(media_tool_pyinstaller_args(staged_media_tools))
+        logger.info(
+            "Bundling FFmpeg media tools under sys._MEIPASS/tools: ffmpeg=%s, ffprobe=%s",
+            media_tools.ffmpeg,
+            media_tools.ffprobe,
+        )
+
     # Change to backend directory
     os.chdir(backend_dir)
 
@@ -600,8 +842,14 @@ def build_server(cuda=False, rocm=False):
                 )
 
         # Run PyInstaller
-        PyInstaller.__main__.run(args)
+        _run_pyinstaller(args)
     finally:
+        if media_tools_staging is not None:
+            try:
+                media_tools_staging.cleanup()
+            except OSError as exc:
+                logger.warning("Failed to clean temporary media-tool staging directory: %s", exc)
+
         # Restore torch if we swapped it out (even on build failure)
         if restore_torch == "cuda":
             logger.info("Restoring CUDA torch...")
@@ -673,7 +921,7 @@ def build_shim():
     """Build the voicebox-mcp stdio shim as a tiny standalone binary.
 
     This is the bridge for MCP clients that only speak stdio — it proxies
-    JSON-RPC to the main voicebox-server's /mcp endpoint. Keep it small: no
+    JSON-RPC to the main diarix-server's /mcp endpoint. Keep it small: no
     torch, no ML deps, just httpx + asyncio.
     """
     backend_dir = Path(__file__).parent
@@ -755,7 +1003,7 @@ def build_shim():
     )
 
     os.chdir(backend_dir)
-    PyInstaller.__main__.run(args)
+    _run_pyinstaller(args)
     logger.info("Shim built: %s", backend_dir / "dist" / "voicebox-mcp")
 
 
@@ -764,21 +1012,33 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cuda",
         action="store_true",
-        help="Build CUDA-enabled binary (voicebox-server-cuda)",
+        help="Build CUDA-enabled binary (diarix-server-cuda)",
     )
     parser.add_argument(
         "--rocm",
         action="store_true",
-        help="Build ROCm-enabled binary (voicebox-server-rocm) for AMD GPUs",
+        help="Build ROCm-enabled binary (diarix-server-rocm) for AMD GPUs",
     )
     parser.add_argument(
         "--shim",
         action="store_true",
         help="Build the voicebox-mcp stdio shim binary instead of the server",
     )
+    parser.add_argument(
+        "--require-media-tools",
+        action="store_true",
+        help="Fail unless FFmpeg and FFprobe can be bundled under the server's tools directory",
+    )
     cli_args = parser.parse_args()
-    if cli_args.shim:
-        build_shim()
-    else:
-        build_server(cuda=cli_args.cuda, rocm=cli_args.rocm)
+    try:
+        if cli_args.shim:
+            build_shim()
+        else:
+            build_server(
+                cuda=cli_args.cuda,
+                rocm=cli_args.rocm,
+                require_media_tools=cli_args.require_media_tools,
+            )
+    except MediaToolPackagingError as exc:
+        parser.exit(2, f"Media tool packaging error: {exc}\n")
 

@@ -5,7 +5,7 @@ description: "Use built-in, ready-made voices without recording audio samples"
 
 ## Overview
 
-Some Voicebox engines ship with a curated set of pre-built voices. Instead of cloning from your own audio sample, you pick a voice from a fixed catalog and the model speaks in that voice. No recording, no upload, no per-voice training required.
+Some Diarix engines ship with a curated set of pre-built voices. Instead of cloning from your own audio sample, you pick a voice from a fixed catalog and the model speaks in that voice. No recording, no upload, no per-voice training required.
 
 Two engines in 0.4 ship preset voices:
 
@@ -61,7 +61,7 @@ Two engines in 0.4 ship preset voices:
 
 ## Kokoro 82M — 50 Voices Across 9 Languages
 
-Kokoro is the smallest engine in Voicebox at 82M parameters. It runs at CPU realtime with negligible VRAM, making it the best option for lightweight local inference. Voices are pre-built style vectors trained into the model — there's no concept of cloning here.
+Kokoro is the smallest engine in Diarix at 82M parameters. It runs at CPU realtime with negligible VRAM, making it the best option for lightweight local inference. Voices are pre-built style vectors trained into the model — there's no concept of cloning here.
 
 **Repository:** [`hexgrad/Kokoro-82M`](https://huggingface.co/hexgrad/Kokoro-82M) · Apache 2.0 licensed
 
@@ -183,7 +183,7 @@ The full Generate page also surfaces the instruct field as a separate input.
   Preset voices are fixed — you can't fine-tune or modify the underlying voice. If you want a specific voice that isn't in the catalog, use a cloning engine and provide a reference sample.
 </Callout>
 
-- Preset voices can't be exported to use in other Voicebox installations as audio (only as profile metadata pointing to the same engine + voice ID)
+- Preset voices can't be exported to use in other Diarix installations as audio (only as profile metadata pointing to the same engine + voice ID)
 - The Kokoro voice catalog is set by the upstream model — new voices appear only when hexgrad publishes new model releases
 - Qwen CustomVoice's 9 speakers are part of the model checkpoint — same constraint
 

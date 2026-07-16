@@ -81,7 +81,7 @@ transcript:
 | **Preserve technical terms** | Leave identifiers (`handleSubmit`, `npm install`) untouched. |
 
 See the Refinement section of [Dictation](/overview/dictation#refinement) for
-how Voicebox strips Whisper loop hallucinations *before* the LLM sees the
+how Diarix strips Whisper loop hallucinations *before* the LLM sees the
 transcript — a capture can be re-refined any number of times without
 re-introducing "thanks for watching thanks for watching" echoes.
 
@@ -119,7 +119,7 @@ in one of your voices on their own.
 ## Send-to menu
 
 Each capture has a Send-to menu for moving its content into other parts of
-Voicebox:
+Diarix:
 
 - **Copy transcript** — to clipboard
 - **Use as voice sample…** — promote this capture to a sample on a voice
@@ -131,7 +131,7 @@ Voicebox:
 
 ## Storage
 
-The original audio is kept alongside the transcript in your Voicebox data
+The original audio is kept alongside the transcript in your Diarix data
 directory. **Settings → Captures → Storage** shows the captures folder and can
 open it directly in your file manager.
 
@@ -170,7 +170,7 @@ The Captures tab is backed by a small set of REST endpoints:
 | `POST` | `/profiles/{id}/samples/from-capture/{capture_id}` | Promote a capture to a voice profile sample. |
 
 These endpoints are stable and usable from your own scripts — see
-[Remote Mode](/overview/remote-mode) for running Voicebox as a server the rest
+[Remote Mode](/overview/remote-mode) for running Diarix as a server the rest
 of your machine can talk to.
 
 ## Next steps

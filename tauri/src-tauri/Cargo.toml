@@ -1,10 +1,9 @@
 [package]
-name = "voicebox"
-version = "0.5.0"
-description = "A production-quality desktop app for Qwen3-TTS voice cloning and generation"
-authors = ["you"]
-license = ""
-repository = ""
+name = "diarix"
+version = "0.1.0"
+description = "Diarix local speech studio, built as a fork of Voicebox"
+authors = ["Diarix contributors", "Voicebox contributors"]
+license = "MIT"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,6 +16,7 @@ tauri = { version = "2.0", features = ["macos-private-api"] }
 tauri-plugin-dialog = "2.0"
 tauri-plugin-fs = "2.0"
 tauri-plugin-shell = "2.0"
+tauri-plugin-updater = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
@@ -50,7 +50,6 @@ windows = { version = "0.62", features = [
 webkit2gtk = "2.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-updater = "2.0"
 tauri-plugin-process = "2.0"
 # Observe-only global keyboard tap. Covers macOS, Windows, and Linux
 # (evdev) with left/right modifier fidelity, which is the hard

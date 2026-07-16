@@ -27,7 +27,7 @@ export function CloudSection() {
     if (connected && polling) {
       setPolling(false);
       toast({
-        title: 'Connected to Voicebox Cloud',
+      title: 'Connected to cloud server',
         description: `Linked as ${status?.device_name ?? 'this device'}.`,
       });
     }
@@ -84,7 +84,7 @@ export function CloudSection() {
 
   return (
     <SettingSection
-      title="Voicebox Cloud"
+          title="Cloud server"
       description="End-to-end encrypted backup & sync across your devices."
     >
       <SettingRow

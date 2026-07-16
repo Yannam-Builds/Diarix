@@ -1,4 +1,4 @@
-# Voicebox development commands
+# Diarix development commands
 # Install: brew install just (or cargo install just)
 # Usage: just --list
 
@@ -230,8 +230,8 @@ build-server: _ensure-venv
     if ($LASTEXITCODE -ne 0) { throw "build_binary.py failed with exit code $LASTEXITCODE" }; \
     $triple = (rustc --print host-tuple); \
     New-Item -ItemType Directory -Path "{{ tauri_dir }}/src-tauri/binaries" -Force | Out-Null; \
-    Copy-Item "backend/dist/voicebox-server.exe" "{{ tauri_dir }}/src-tauri/binaries/voicebox-server-$triple.exe" -Force; \
-    Write-Host "Copied sidecar: voicebox-server-$triple.exe"
+    Copy-Item "backend/dist/diarix-server.exe" "{{ tauri_dir }}/src-tauri/binaries/diarix-server-$triple.exe" -Force; \
+    Write-Host "Copied sidecar: diarix-server-$triple.exe"
 
 # Build CUDA server binary and place in app data dir for local testing
 [windows]
@@ -240,10 +240,10 @@ build-server-cuda: _ensure-venv
     $env:PATH = "{{ venv_bin }};$env:PATH"; \
     & "{{ python }}" backend/build_binary.py --cuda; \
     if ($LASTEXITCODE -ne 0) { throw "build_binary.py --cuda failed with exit code $LASTEXITCODE" }; \
-    $dest = "$env:APPDATA/sh.voicebox.app/backends/cuda"; \
+    $dest = "$env:APPDATA/com.diarix.app/backends/cuda"; \
     if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }; \
     New-Item -ItemType Directory -Path $dest -Force | Out-Null; \
-    Copy-Item "backend/dist/voicebox-server-cuda/*" $dest -Recurse -Force; \
+    Copy-Item "backend/dist/diarix-server-cuda/*" $dest -Recurse -Force; \
     Write-Host "Copied CUDA backend to $dest"
 
 # Build everything locally: CPU server + CUDA server + installable Tauri app

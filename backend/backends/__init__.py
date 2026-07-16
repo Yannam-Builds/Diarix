@@ -14,12 +14,14 @@ from ..utils import hf_offline_patch  # noqa: F401
 
 import threading
 from dataclasses import dataclass, field
-from typing import Protocol, Optional, Tuple, List
+from typing import Callable, Protocol, Optional, Tuple, List
 from typing_extensions import runtime_checkable
 import numpy as np
 
 DEFAULT_LLM_MAX_TOKENS = 512
 DEFAULT_LLM_TEMPERATURE = 0.7
+
+ProgressCallback = Callable[[float], None]
 
 from ..utils.platform_detect import get_backend_type
 
@@ -42,7 +44,40 @@ WHISPER_HF_REPOS = {
     "medium": "openai/whisper-medium",
     "large": "openai/whisper-large-v3",
     "turbo": "openai/whisper-large-v3-turbo",
+    "distil-large-v3.5": "distil-whisper/distil-large-v3.5",
 }
+
+WHISPER_LANGUAGE_CODES = [
+    "en", "zh", "de", "es", "ru", "ko", "fr", "ja", "pt", "tr", "pl", "ca",
+    "nl", "ar", "sv", "it", "id", "hi", "fi", "vi", "he", "uk", "el", "ms",
+    "cs", "ro", "da", "hu", "ta", "no", "th", "ur", "hr", "bg", "lt", "la",
+    "mi", "ml", "cy", "sk", "te", "fa", "lv", "bn", "sr", "az", "sl", "kn",
+    "et", "mk", "br", "eu", "is", "hy", "ne", "mn", "bs", "kk", "sq", "sw",
+    "gl", "mr", "pa", "si", "km", "sn", "yo", "so", "af", "oc", "ka", "be",
+    "tg", "sd", "gu", "am", "yi", "lo", "uz", "fo", "ht", "ps", "tk", "nn",
+    "mt", "sa", "lb", "my", "bo", "tl", "mg", "as", "tt", "haw", "ln", "ha",
+    "ba", "jw", "su", "yue",
+]
+
+QWEN3_ASR_LANGUAGE_CODES = [
+    "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko", "ru",
+    "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi", "pl", "cs",
+    "fil", "fa", "el", "hu", "mk", "ro",
+]
+
+
+@dataclass(frozen=True)
+class AudioInputSpec:
+    """Canonical media format an STT model receives after ingestion."""
+
+    sample_rate_hz: int = 16_000
+    channels: int = 1
+    sample_format: str = "s16"
+    codec: str = "pcm_s16le"
+    container: str = "wav"
+
+
+DEFAULT_STT_AUDIO_INPUT = AudioInputSpec()
 
 
 @dataclass
@@ -58,6 +93,20 @@ class ModelConfig:
     needs_trim: bool = False
     supports_instruct: bool = False
     languages: list[str] = field(default_factory=lambda: ["en"])
+    modality: str = "tts"
+    runtime_group: str = "core"
+    capabilities: list[str] = field(default_factory=list)
+    description: str = ""
+    precision_options: list[str] = field(default_factory=list)
+    default_precision: Optional[str] = None
+    recommended: bool = False
+    min_vram_gb: Optional[float] = None
+    audio_input: Optional[AudioInputSpec] = None
+
+
+def _stt_model_config(**kwargs) -> ModelConfig:
+    """Build an STT config with the shared normalized-audio contract."""
+    return ModelConfig(audio_input=DEFAULT_STT_AUDIO_INPUT, **kwargs)
 
 
 @runtime_checkable
@@ -145,9 +194,22 @@ class STTBackend(Protocol):
         audio_path: str,
         language: Optional[str] = None,
         model_size: Optional[str] = None,
+        progress_callback: Optional[ProgressCallback] = None,
+        should_stop: Optional[Callable[[], bool]] = None,
+        partial_callback: Optional[Callable[[str], None]] = None,
+        segments_callback: Optional[Callable[[list], None]] = None,
     ) -> str:
         """
         Transcribe audio to text.
+
+        ``should_stop``, if given, is polled between audio chunks (where the
+        adapter supports chunking) so a cancelled job can stop after the
+        in-flight chunk instead of running to completion. ``partial_callback``,
+        if given, receives the accumulated transcript text after each chunk
+        completes, for live progress display. ``segments_callback``, if given,
+        receives the final ``{start, end, text}`` segment list from engines
+        with real timestamps (Faster-Whisper, WhisperX); engines without
+        honest segment boundaries never invoke it.
 
         Returns:
             Transcribed text
@@ -202,6 +264,8 @@ _tts_backend: Optional[TTSBackend] = None
 _tts_backends: dict[str, TTSBackend] = {}
 _tts_backends_lock = threading.Lock()
 _stt_backend: Optional[STTBackend] = None
+_stt_backends: dict[str, STTBackend] = {}
+_stt_backends_lock = threading.Lock()
 _llm_backends: dict[str, LLMBackend] = {}
 _llm_backends_lock = threading.Lock()
 
@@ -370,40 +434,332 @@ def _get_non_qwen_tts_configs() -> list[ModelConfig]:
 def _get_whisper_configs() -> list[ModelConfig]:
     """Return Whisper STT model configs."""
     return [
-        ModelConfig(
+        _stt_model_config(
             model_name="whisper-base",
             display_name="Whisper Base",
             engine="whisper",
             hf_repo_id="openai/whisper-base",
             model_size="base",
+            modality="stt",
+            capabilities=["language_detection", "long_audio", "multilingual"],
+            languages=WHISPER_LANGUAGE_CODES,
+            description="Compact general-purpose transcription.",
         ),
-        ModelConfig(
+        _stt_model_config(
             model_name="whisper-small",
             display_name="Whisper Small",
             engine="whisper",
             hf_repo_id="openai/whisper-small",
             model_size="small",
+            modality="stt",
+            capabilities=["language_detection", "long_audio", "multilingual"],
+            languages=WHISPER_LANGUAGE_CODES,
+            description="Balanced local transcription.",
         ),
-        ModelConfig(
+        _stt_model_config(
             model_name="whisper-medium",
             display_name="Whisper Medium",
             engine="whisper",
             hf_repo_id="openai/whisper-medium",
             model_size="medium",
+            modality="stt",
+            capabilities=["language_detection", "long_audio", "multilingual"],
+            languages=WHISPER_LANGUAGE_CODES,
+            description="Higher-accuracy multilingual transcription.",
         ),
-        ModelConfig(
+        _stt_model_config(
             model_name="whisper-large",
             display_name="Whisper Large",
             engine="whisper",
             hf_repo_id="openai/whisper-large-v3",
             model_size="large",
+            modality="stt",
+            capabilities=["language_detection", "long_audio", "multilingual"],
+            languages=WHISPER_LANGUAGE_CODES,
+            description="Whisper's highest-quality multilingual model.",
+            min_vram_gb=10,
         ),
-        ModelConfig(
+        _stt_model_config(
             model_name="whisper-turbo",
             display_name="Whisper Turbo",
             engine="whisper",
             hf_repo_id="openai/whisper-large-v3-turbo",
             model_size="turbo",
+            modality="stt",
+            capabilities=["language_detection", "long_audio", "multilingual"],
+            languages=WHISPER_LANGUAGE_CODES,
+            description="Near-large quality with faster inference.",
+            recommended=True,
+            min_vram_gb=6,
+        ),
+        _stt_model_config(
+            model_name="whisper-distil-large-v3.5",
+            display_name="Distil-Whisper Large v3.5",
+            engine="whisper",
+            hf_repo_id="distil-whisper/distil-large-v3.5",
+            model_size="distil-large-v3.5",
+            size_mb=1600,
+            languages=["en"],
+            modality="stt",
+            capabilities=["long_audio"],
+            description="Fast, accurate English transcription distilled from Whisper Large v3.",
+            precision_options=["float16", "float32"],
+            default_precision="float16",
+            min_vram_gb=5,
+        ),
+    ]
+
+
+def _get_advanced_stt_configs() -> list[ModelConfig]:
+    """Optional STT engines supplied by the advanced speech runtime."""
+    european_languages = [
+        "bg", "hr", "cs", "da", "nl", "en", "et", "fi", "fr", "de",
+        "el", "hu", "it", "lv", "lt", "mt", "pl", "pt", "ro", "sk",
+        "sl", "es", "sv", "ru", "uk",
+    ]
+    return [
+        _stt_model_config(
+            model_name="faster-whisper-tiny",
+            display_name="Faster-Whisper Tiny",
+            engine="faster_whisper",
+            hf_repo_id="Systran/faster-whisper-tiny",
+            model_size="faster-whisper-tiny",
+            size_mb=75,
+            languages=WHISPER_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "segment_timestamps", "vad", "long_audio", "multilingual"],
+            description="Compact multilingual CTranslate2 transcription with VAD and native long-audio segmentation.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            min_vram_gb=1,
+        ),
+        _stt_model_config(
+            model_name="faster-distil-whisper-large-v3",
+            display_name="Faster Distil-Whisper Large v3",
+            engine="faster_whisper",
+            hf_repo_id="Systran/faster-distil-whisper-large-v3",
+            model_size="faster-distil-whisper-large-v3",
+            size_mb=1500,
+            languages=["en"],
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["segment_timestamps", "vad", "long_audio"],
+            description="Fast English-only CTranslate2 transcription optimized for long recordings.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            min_vram_gb=4,
+        ),
+        _stt_model_config(
+            model_name="whisperx-large-v3",
+            display_name="WhisperX Large v3",
+            engine="whisperx",
+            hf_repo_id="Systran/faster-whisper-large-v3",
+            model_size="large-v3",
+            size_mb=3100,
+            languages=WHISPER_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=[
+                "language_detection", "word_timestamps", "alignment", "vad", "long_audio", "multilingual"
+            ],
+            description="Meeting transcription with aligned word timestamps and voice activity detection.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            recommended=True,
+            min_vram_gb=8,
+        ),
+        _stt_model_config(
+            model_name="nvidia-parakeet-tdt-0.6b-v3",
+            display_name="NVIDIA Parakeet TDT 0.6B v3",
+            engine="nemo_asr",
+            hf_repo_id="nvidia/parakeet-tdt-0.6b-v3",
+            model_size="nvidia-parakeet-tdt-0.6b-v3",
+            size_mb=2500,
+            languages=european_languages,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "word_timestamps", "long_audio", "multilingual"],
+            description="High-throughput multilingual transcription for 25 European languages.",
+            precision_options=["bfloat16", "float16", "float32"],
+            default_precision="bfloat16",
+            min_vram_gb=4,
+        ),
+        _stt_model_config(
+            model_name="nvidia-canary-180m-flash",
+            display_name="NVIDIA Canary 180M Flash",
+            engine="nemo_asr",
+            hf_repo_id="nvidia/canary-180m-flash",
+            model_size="nvidia-canary-180m-flash",
+            size_mb=703,
+            languages=["en", "de", "fr", "es"],
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["translation", "word_timestamps", "long_audio", "multilingual"],
+            description="Low-latency NeMo transcription for English, German, French, and Spanish.",
+            precision_options=["bfloat16", "float16", "float32"],
+            default_precision="bfloat16",
+            min_vram_gb=2,
+        ),
+        _stt_model_config(
+            model_name="nvidia-canary-1b-v2",
+            display_name="NVIDIA Canary 1B v2",
+            engine="nemo_asr",
+            hf_repo_id="nvidia/canary-1b-v2",
+            model_size="nvidia-canary-1b-v2",
+            size_mb=4000,
+            languages=european_languages,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["translation", "word_timestamps", "long_audio", "multilingual"],
+            description="Multilingual transcription and speech translation through NVIDIA NeMo.",
+            precision_options=["bfloat16", "float16", "float32"],
+            default_precision="bfloat16",
+            min_vram_gb=6,
+        ),
+        _stt_model_config(
+            model_name="nvidia-canary-qwen-2.5b",
+            display_name="NVIDIA Canary-Qwen 2.5B",
+            engine="nemo_asr",
+            hf_repo_id="nvidia/canary-qwen-2.5b",
+            model_size="nvidia-canary-qwen-2.5b",
+            size_mb=4882,
+            languages=["en"],
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["punctuation", "capitalization", "long_audio"],
+            description="English speech recognition with punctuation and capitalization through NVIDIA NeMo SALM.",
+            precision_options=["bfloat16", "float16"],
+            default_precision="bfloat16",
+            min_vram_gb=8,
+        ),
+        _stt_model_config(
+            model_name="qwen3-asr-0.6b",
+            display_name="Qwen3-ASR 0.6B",
+            engine="qwen_asr",
+            hf_repo_id="Qwen/Qwen3-ASR-0.6B",
+            model_size="qwen3-asr-0.6b",
+            size_mb=1800,
+            languages=QWEN3_ASR_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "streaming", "long_audio", "multilingual"],
+            description="Efficient multilingual and streaming speech recognition.",
+            precision_options=["bfloat16", "float16"],
+            default_precision="bfloat16",
+            min_vram_gb=4,
+        ),
+        _stt_model_config(
+            model_name="qwen3-asr-1.7b",
+            display_name="Qwen3-ASR 1.7B",
+            engine="qwen_asr",
+            hf_repo_id="Qwen/Qwen3-ASR-1.7B",
+            model_size="qwen3-asr-1.7b",
+            size_mb=4200,
+            languages=QWEN3_ASR_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "streaming", "long_audio", "multilingual"],
+            description="High-accuracy multilingual recognition for speech, songs, and difficult audio.",
+            precision_options=["bfloat16", "float16"],
+            default_precision="bfloat16",
+            min_vram_gb=8,
+        ),
+        _stt_model_config(
+            model_name="ibm-granite-speech-3.3-8b",
+            display_name="IBM Granite Speech 3.3 8B",
+            engine="transformers_asr",
+            hf_repo_id="ibm-granite/granite-speech-3.3-8b",
+            model_size="ibm-granite-speech-3.3-8b",
+            size_mb=18000,
+            languages=["en", "fr", "de", "es", "pt"],
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["translation", "speech_reasoning", "multilingual"],
+            description="Heavy speech-language model for transcription, translation, and text follow-up.",
+            precision_options=["bfloat16", "float16"],
+            default_precision="bfloat16",
+            min_vram_gb=18,
+        ),
+        _stt_model_config(
+            model_name="faster-whisper-base",
+            display_name="Faster-Whisper Base",
+            engine="faster_whisper",
+            hf_repo_id="Systran/faster-whisper-base",
+            model_size="faster-whisper-base",
+            size_mb=140,
+            languages=WHISPER_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "segment_timestamps", "vad", "long_audio", "multilingual"],
+            description="CTranslate2 Base Whisper model for faster multilingual transcription.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            min_vram_gb=1,
+        ),
+        _stt_model_config(
+            model_name="faster-whisper-small",
+            display_name="Faster-Whisper Small",
+            engine="faster_whisper",
+            hf_repo_id="Systran/faster-whisper-small",
+            model_size="faster-whisper-small",
+            size_mb=460,
+            languages=WHISPER_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "segment_timestamps", "vad", "long_audio", "multilingual"],
+            description="CTranslate2 Small Whisper model for balanced multilingual transcription.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            min_vram_gb=2,
+        ),
+        _stt_model_config(
+            model_name="faster-whisper-medium",
+            display_name="Faster-Whisper Medium",
+            engine="faster_whisper",
+            hf_repo_id="Systran/faster-whisper-medium",
+            model_size="faster-whisper-medium",
+            size_mb=1500,
+            languages=WHISPER_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "segment_timestamps", "vad", "long_audio", "multilingual"],
+            description="CTranslate2 Medium Whisper model for high-accuracy multilingual transcription.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            min_vram_gb=5,
+        ),
+        _stt_model_config(
+            model_name="faster-whisper-large-v3",
+            display_name="Faster-Whisper Large v3",
+            engine="faster_whisper",
+            hf_repo_id="Systran/faster-whisper-large-v3",
+            model_size="faster-whisper-large-v3",
+            size_mb=3100,
+            languages=WHISPER_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "segment_timestamps", "vad", "long_audio", "multilingual"],
+            description="CTranslate2 Large v3 Whisper model for maximum multilingual accuracy.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            min_vram_gb=8,
+        ),
+        _stt_model_config(
+            model_name="faster-whisper-large-v3-turbo",
+            display_name="Faster-Whisper Large v3 Turbo",
+            engine="faster_whisper",
+            hf_repo_id="dropbox-dash/faster-whisper-large-v3-turbo",
+            model_size="faster-whisper-large-v3-turbo",
+            size_mb=1600,
+            languages=WHISPER_LANGUAGE_CODES,
+            modality="stt",
+            runtime_group="advanced-asr",
+            capabilities=["language_detection", "segment_timestamps", "vad", "long_audio", "multilingual"],
+            description="CTranslate2 Turbo Whisper model for fast high-accuracy multilingual transcription.",
+            precision_options=["float16", "int8_float16", "int8"],
+            default_precision="float16",
+            min_vram_gb=6,
         ),
     ]
 
@@ -437,6 +793,7 @@ def _get_qwen_llm_configs() -> list[ModelConfig]:
             model_size="0.6B",
             size_mb=400 if backend_type == "mlx" else 1400,
             languages=common_languages,
+            modality="llm",
         ),
         ModelConfig(
             model_name="qwen3-1.7b",
@@ -446,6 +803,7 @@ def _get_qwen_llm_configs() -> list[ModelConfig]:
             model_size="1.7B",
             size_mb=1100 if backend_type == "mlx" else 3500,
             languages=common_languages,
+            modality="llm",
         ),
         ModelConfig(
             model_name="qwen3-4b",
@@ -455,6 +813,7 @@ def _get_qwen_llm_configs() -> list[ModelConfig]:
             model_size="4B",
             size_mb=2500 if backend_type == "mlx" else 8000,
             languages=common_languages,
+            modality="llm",
         ),
     ]
 
@@ -466,6 +825,7 @@ def get_all_model_configs() -> list[ModelConfig]:
         + _get_qwen_custom_voice_configs()
         + _get_non_qwen_tts_configs()
         + _get_whisper_configs()
+        + _get_advanced_stt_configs()
         + _get_qwen_llm_configs()
     )
 
@@ -481,8 +841,8 @@ def get_llm_model_configs() -> list[ModelConfig]:
 
 
 def get_stt_model_configs() -> list[ModelConfig]:
-    """Return only STT (Whisper) model configs."""
-    return _get_whisper_configs()
+    """Return every native and optional speech-to-text model."""
+    return _get_whisper_configs() + _get_advanced_stt_configs()
 
 
 # Lookup helpers — these replace the if/elif chains in main.py
@@ -550,12 +910,12 @@ async def ensure_model_cached_or_raise(engine: str, model_size: str = "default")
 def unload_model_by_config(config: ModelConfig) -> bool:
     """Unload a model given its config. Returns True if it was loaded, False otherwise."""
     from . import get_tts_backend_for_engine
-    from ..services import tts, transcribe, llm as llm_service
+    from ..services import tts, llm as llm_service
 
-    if config.engine == "whisper":
-        whisper_model = transcribe.get_whisper_model()
-        if whisper_model.is_loaded() and whisper_model.model_size == config.model_size:
-            transcribe.unload_whisper_model()
+    if config.modality == "stt":
+        stt_model = get_stt_backend_for_engine(config.engine)
+        if stt_model.is_loaded() and stt_model.model_size == config.model_size:
+            stt_model.unload_model()
             return True
         return False
 
@@ -597,9 +957,9 @@ def check_model_loaded(config: ModelConfig) -> bool:
     from ..services import tts, transcribe, llm as llm_service
 
     try:
-        if config.engine == "whisper":
-            whisper_model = transcribe.get_whisper_model()
-            return whisper_model.is_loaded() and getattr(whisper_model, "model_size", None) == config.model_size
+        if config.modality == "stt":
+            backend = get_stt_backend_for_engine(config.engine)
+            return backend.is_loaded() and getattr(backend, "model_size", None) == config.model_size
 
         if config.engine == "qwen_llm":
             backend = llm_service.get_llm_model()
@@ -623,23 +983,49 @@ def check_model_loaded(config: ModelConfig) -> bool:
 
 
 def get_model_load_func(config: ModelConfig):
-    """Return a callable that loads/downloads the model."""
-    from . import get_tts_backend_for_engine
-    from ..services import tts, transcribe, llm as llm_service
+    """Return a weight-only download operation for the model manager.
 
-    if config.engine == "whisper":
-        return lambda: transcribe.get_whisper_model().load_model(config.model_size)
+    Downloading and loading are deliberately separate operations.  A model's
+    optional inference package (for example ``qwen_tts`` or NeMo) must not be
+    imported just to place its HuggingFace files in the shared cache.  Loading
+    still happens through the normal backend path when the model is first used.
+    """
 
-    if config.engine == "qwen":
-        return lambda: tts.get_tts_model().load_model(config.model_size)
+    async def download_model_weights() -> None:
+        import asyncio
 
-    if config.engine == "qwen_custom_voice":
-        return lambda: get_tts_backend_for_engine(config.engine).load_model(config.model_size)
+        from huggingface_hub import snapshot_download
 
-    if config.engine == "qwen_llm":
-        return lambda: llm_service.get_llm_model().load_model(config.model_size)
+        from .base import (
+            is_model_cached,
+            materialize_windows_snapshot_links,
+            model_load_progress,
+        )
 
-    return lambda: get_tts_backend_for_engine(config.engine).load_model()
+        def download() -> None:
+            download_options = {"repo_id": config.hf_repo_id}
+            if config.model_name == "nvidia-parakeet-tdt-0.6b-v3":
+                # Diarix runs Parakeet through NVIDIA's supported NeMo path.
+                # Avoid the duplicate Transformers checkpoint stored beside
+                # the .nemo archive.
+                download_options["allow_patterns"] = [
+                    "*.nemo",
+                    "*.json",
+                    "*.model",
+                    "*.txt",
+                ]
+
+            with model_load_progress(
+                config.model_name,
+                is_model_cached(config.hf_repo_id),
+            ):
+                snapshot_path = snapshot_download(**download_options)
+                if config.engine == "faster_whisper":
+                    materialize_windows_snapshot_links(snapshot_path)
+
+        await asyncio.to_thread(download)
+
+    return download_model_weights
 
 
 def get_tts_backend() -> TTSBackend:
@@ -722,21 +1108,63 @@ def get_stt_backend() -> STTBackend:
     Returns:
         STT backend instance (MLX or PyTorch)
     """
+    return get_stt_backend_for_engine("whisper")
+
+
+def get_stt_backend_for_engine(engine: str) -> STTBackend:
+    """Return a lazily-created STT adapter for an engine family."""
     global _stt_backend
 
-    if _stt_backend is None:
-        backend_type = get_backend_type()
+    if engine in _stt_backends:
+        return _stt_backends[engine]
 
-        if backend_type == "mlx":
-            from .mlx_backend import MLXSTTBackend
+    with _stt_backends_lock:
+        if engine in _stt_backends:
+            return _stt_backends[engine]
 
-            _stt_backend = MLXSTTBackend()
+        if engine == "whisper":
+            if get_backend_type() == "mlx":
+                from .mlx_backend import MLXSTTBackend
+                backend = MLXSTTBackend()
+            else:
+                from .pytorch_backend import PyTorchSTTBackend
+                backend = PyTorchSTTBackend()
+            _stt_backend = backend
+        elif engine == "whisperx":
+            from .stt.whisperx_backend import WhisperXSTTBackend
+            backend = WhisperXSTTBackend()
+        elif engine == "faster_whisper":
+            from .stt.faster_whisper_backend import FasterWhisperSTTBackend
+            backend = FasterWhisperSTTBackend()
+        elif engine == "transformers_asr":
+            from .stt.transformers_backend import TransformersASRBackend
+            backend = TransformersASRBackend()
+        elif engine == "nemo_asr":
+            from .stt.nemo_backend import NeMoASRBackend
+            backend = NeMoASRBackend()
+        elif engine == "qwen_asr":
+            from .stt.qwen_backend import QwenASRBackend
+            backend = QwenASRBackend()
         else:
-            from .pytorch_backend import PyTorchSTTBackend
+            raise ValueError(f"Unknown STT engine: {engine}")
 
-            _stt_backend = PyTorchSTTBackend()
+        _stt_backends[engine] = backend
+        return backend
 
-    return _stt_backend
+
+def unload_all_stt_backends() -> None:
+    """Unload every instantiated STT adapter, including optional runtimes."""
+    for backend in list(_stt_backends.values()):
+        backend.unload_model()
+
+
+def resolve_stt_config(model: Optional[str]) -> ModelConfig:
+    """Resolve a global model id or a legacy Whisper size to an STT config."""
+    requested = model or "whisper-turbo"
+    for config in get_stt_model_configs():
+        if requested in (config.model_name, config.model_size):
+            return config
+    raise ValueError(f"Unknown transcription model: {requested}")
 
 
 def get_llm_backend() -> LLMBackend:
@@ -774,8 +1202,9 @@ def get_llm_backend_for_engine(engine: str) -> LLMBackend:
 
 def reset_backends():
     """Reset backend instances (useful for testing)."""
-    global _tts_backend, _tts_backends, _stt_backend, _llm_backends
+    global _tts_backend, _tts_backends, _stt_backend, _stt_backends, _llm_backends
     _tts_backend = None
     _tts_backends.clear()
     _stt_backend = None
+    _stt_backends.clear()
     _llm_backends.clear()

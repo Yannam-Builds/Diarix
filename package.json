@@ -1,6 +1,6 @@
 {
-  "name": "voicebox",
-  "version": "0.5.0",
+  "name": "diarix",
+  "version": "0.1.0",
   "private": true,
   "workspaces": [
     "app",
@@ -19,7 +19,7 @@
     "build:landing": "cd landing && bun run build",
     "build:release": "./scripts/prepare-release.sh",
     "generate:api": "./scripts/generate-api.sh",
-    "generate:keys": "cd tauri && bun tauri signer generate -w ~/.tauri/voicebox.key",
+    "generate:keys": "cd tauri && bun tauri signer generate -w ~/.tauri/diarix.key",
     "build:server": "./scripts/build-server.sh",
     "update:icons": "./scripts/update-icons.sh",
     "convert:assets": "./scripts/convert-assets.sh",

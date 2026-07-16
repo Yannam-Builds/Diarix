@@ -12,6 +12,11 @@
     "unknownError": "Erro desconhecido"
   },
   "nav": {
+    "transcribe": "Transcrever",
+    "voiceStudio": "Estúdio de voz",
+    "profiles": "Perfis",
+    "history": "Histórico",
+    "mcp": "MCP",
     "generate": "Gerar",
     "stories": "Histórias",
     "captures": "Capturas",
@@ -135,13 +140,13 @@
       },
       "inputMonitoring": {
         "label": "Permissão de Monitoramento de Entrada",
-        "ready": "O macOS permite que o Voicebox detecte seu atalho global.",
-        "missing": "O macOS precisa permitir que o Voicebox detecte o atalho global.",
+        "ready": "O macOS permite que o Diarix detecte seu atalho global.",
+        "missing": "O macOS precisa permitir que o Diarix detecte o atalho global.",
         "openSettings": "Abrir Ajustes"
       },
       "accessibility": {
         "label": "Permissão de Acessibilidade",
-        "ready": "O Voicebox pode colar transcrições em outros apps.",
+        "ready": "O Diarix pode colar transcrições em outros apps.",
         "missing": "Necessária para que as transcrições possam ser coladas no app em foco.",
         "openSettings": "Abrir Ajustes"
       }
@@ -149,19 +154,19 @@
     "permissions": {
       "accessibility": {
         "title": "Conceda a permissão de Acessibilidade para ativar a colagem automática",
-        "body": "O Voicebox precisa de <path>Ajustes do Sistema → Privacidade e Segurança → Acessibilidade</path> para colar transcrições em outros apps. Seu ditado ainda aparece na aba Capturas sem isso.",
+        "body": "O Diarix precisa de <path>Ajustes do Sistema → Privacidade e Segurança → Acessibilidade</path> para colar transcrições em outros apps. Seu ditado ainda aparece na aba Capturas sem isso.",
         "openSettings": "Abrir Ajustes",
         "recheck": "Já ativei",
         "rechecking": "Verificando…",
-        "stillMissing": "Ainda não detectado. O macOS geralmente exige fechar e reabrir o Voicebox depois de alternar a permissão."
+        "stillMissing": "Ainda não detectado. O macOS geralmente exige fechar e reabrir o Diarix depois de alternar a permissão."
       },
       "inputMonitoring": {
         "title": "Conceda Monitoramento de Entrada para ativar o atalho global",
-        "body": "O Voicebox precisa de <path>Ajustes do Sistema → Privacidade e Segurança → Monitoramento de Entrada</path> para detectar sua combinação de ditado. A opção está ligada, mas o macOS está bloqueando os eventos de tecla até você permitir.",
+        "body": "O Diarix precisa de <path>Ajustes do Sistema → Privacidade e Segurança → Monitoramento de Entrada</path> para detectar sua combinação de ditado. A opção está ligada, mas o macOS está bloqueando os eventos de tecla até você permitir.",
         "openSettings": "Abrir Ajustes",
         "recheck": "Já ativei",
         "rechecking": "Verificando…",
-        "stillMissing": "Ainda não detectado. O macOS geralmente exige fechar e reabrir o Voicebox depois de alternar a permissão."
+        "stillMissing": "Ainda não detectado. O macOS geralmente exige fechar e reabrir o Diarix depois de alternar a permissão."
       }
     }
   },
@@ -748,7 +753,7 @@
     },
     "language": {
       "label": "Idioma",
-      "description": "Escolha o idioma de exibição do Voicebox."
+      "description": "Escolha o idioma de exibição do Diarix."
     },
     "theme": {
       "label": "Tema",
@@ -764,7 +769,7 @@
       "discord": { "title": "Entrar no Discord", "subtitle": "Tire dúvidas e compartilhe vozes" },
       "serverUrl": {
         "title": "URL do Servidor",
-        "description": "O endereço do seu servidor backend do Voicebox.",
+        "description": "O endereço do seu servidor backend do Diarix.",
         "invalidUrl": "Digite uma URL válida",
         "updatedTitle": "URL do servidor atualizada",
         "updatedDescription": "Conectado a {{url}}"
@@ -819,7 +824,7 @@
       },
       "api": {
         "title": "Acesso à API",
-        "description": "Integre o Voicebox ao seu fluxo de trabalho via API REST em <code>{{url}}</code>",
+        "description": "Integre o Diarix ao seu fluxo de trabalho via API REST em <code>{{url}}</code>",
         "viewReference": "Ver a referência completa da API",
         "endpoints": {
           "generate": "Gerar fala",
@@ -908,7 +913,7 @@
         },
         "autoPaste": {
           "title": "Colar automaticamente no campo de texto em foco",
-          "description": "Se um campo de texto estiver em foco em outro app, cola diretamente nele. O Voicebox salva e restaura o que estava na sua área de transferência."
+          "description": "Se um campo de texto estiver em foco em outro app, cola diretamente nele. O Diarix salva e restaura o que estava na sua área de transferência."
         }
       },
       "transcription": {
@@ -916,7 +921,7 @@
         "description": "Escolha qual modelo de fala para texto roda nas suas capturas.",
         "model": {
           "title": "Modelo de transcrição",
-          "description": "O Whisper vem com o Voicebox e roda inteiramente na sua máquina.",
+          "description": "O Whisper vem com o Diarix e roda inteiramente na sua máquina.",
           "base": "Whisper Base · 74M · {{tail}}",
           "small": "Whisper Small · 244M · {{tail}}",
           "medium": "Whisper Medium · 769M · {{tail}}",
@@ -992,7 +997,7 @@
       },
       "storage": {
         "title": "Armazenamento",
-        "description": "As capturas são salvas como arquivos pareados de áudio e transcrição no seu diretório de dados do Voicebox.",
+        "description": "As capturas são salvas como arquivos pareados de áudio e transcrição no seu diretório de dados do Diarix.",
         "retention": {
           "title": "Retenção",
           "description": "Por quanto tempo manter as capturas. Vale tanto para áudio quanto para transcrições.",
@@ -1009,7 +1014,7 @@
       },
       "sidebar": {
         "aboutTitle": "Sobre as Capturas",
-        "aboutBody": "Segure um atalho em qualquer lugar da sua máquina, fale, e o Voicebox transforma sua voz em texto. Reproduza-o em qualquer voz clonada, cole-o em qualquer app ou envie-o ao seu agente de programação.",
+        "aboutBody": "Segure um atalho em qualquer lugar da sua máquina, fale, e o Diarix transforma sua voz em texto. Reproduza-o em qualquer voz clonada, cole-o em qualquer app ou envie-o ao seu agente de programação.",
         "differencesTitle": "O que muda",
         "local": {
           "title": "Totalmente local.",
@@ -1025,14 +1030,14 @@
         },
         "windowsCaveat": {
           "title": "Atenção no Windows",
-          "body": "O atalho não dispara enquanto o próprio Voicebox ou qualquer app rodando como administrador estiver em foco. Estamos trabalhando nisso."
+          "body": "O atalho não dispara enquanto o próprio Diarix ou qualquer app rodando como administrador estiver em foco. Estamos trabalhando nisso."
         }
       }
     },
     "mcp": {
       "install": {
         "title": "Instalar no seu agente",
-        "description": "O Voicebox expõe um servidor MCP local sempre que o app está aberto. Cole um destes trechos na configuração de MCP do seu agente.",
+        "description": "O Diarix expõe um servidor MCP local sempre que o app está aberto. Cole um destes trechos na configuração de MCP do seu agente.",
         "http": {
           "title": "HTTP (recomendado)",
           "description": "Para clientes que falam MCP via HTTP — Claude Code, Cursor, Windsurf, VS Code."
@@ -1073,7 +1078,7 @@
       },
       "sidebar": {
         "aboutTitle": "Sobre o MCP",
-        "aboutBody": "O Model Context Protocol permite que seu agente de programação com IA — Claude Code, Cursor, Windsurf — chame as ferramentas do Voicebox. Fale em uma voz clonada, transcreva áudio, navegue pelas capturas.",
+        "aboutBody": "O Model Context Protocol permite que seu agente de programação com IA — Claude Code, Cursor, Windsurf — chame as ferramentas do Diarix. Fale em uma voz clonada, transcreva áudio, navegue pelas capturas.",
         "toolsTitle": "Ferramentas disponíveis",
         "tools": {
           "speak": "Falar texto em um perfil de voz.",
@@ -1128,7 +1133,7 @@
         "switchCpu": "Falha ao mudar para CPU",
         "deleteCuda": "Falha ao excluir o backend CUDA"
       },
-      "footer": "O Voicebox detecta e usa automaticamente a melhor GPU disponível no seu sistema. Em Macs com Apple Silicon, o backend MLX roda nativamente no Neural Engine e na GPU via Metal Performance Shaders (MPS), sem configuração adicional. No Windows e no Linux com GPUs NVIDIA, você pode baixar um backend CUDA opcional para inferência acelerada por hardware. AMD ROCm, Intel XPU e DirectML também são suportados quando disponíveis através do PyTorch. Quando nenhuma GPU é detectada, o Voicebox recorre à CPU — todos os motores ainda funcionam, só que mais devagar."
+      "footer": "O Diarix detecta e usa automaticamente a melhor GPU disponível no seu sistema. Em Macs com Apple Silicon, o backend MLX roda nativamente no Neural Engine e na GPU via Metal Performance Shaders (MPS), sem configuração adicional. No Windows e no Linux com GPUs NVIDIA, você pode baixar um backend CUDA opcional para inferência acelerada por hardware. AMD ROCm, Intel XPU e DirectML também são suportados quando disponíveis através do PyTorch. Quando nenhuma GPU é detectada, o Diarix recorre à CPU — todos os motores ainda funcionam, só que mais devagar."
     },
     "logs": {
       "title": "Logs do Servidor",

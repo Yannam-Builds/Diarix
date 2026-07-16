@@ -151,7 +151,7 @@ async def export_generation(
     safe_text = "".join(c for c in generation.text[:30] if c.isalnum() or c in (" ", "-", "_")).strip()
     if not safe_text:
         safe_text = "generation"
-    filename = f"generation-{safe_text}.voicebox.zip"
+    filename = f"generation-{safe_text}.diarix.zip"
 
     return StreamingResponse(
         io.BytesIO(zip_bytes),

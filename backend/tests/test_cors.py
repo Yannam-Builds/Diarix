@@ -32,6 +32,8 @@ def _build_app(env_origins: str = "") -> FastAPI:
     _default_origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:17494",
+        "http://127.0.0.1:17494",
         "http://localhost:17493",
         "http://127.0.0.1:17493",
         "tauri://localhost",
@@ -88,6 +90,8 @@ class TestCORSDefaultOrigins:
     @pytest.mark.parametrize("origin", [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:17494",
+        "http://127.0.0.1:17494",
         "http://localhost:17493",
         "http://127.0.0.1:17493",
         "tauri://localhost",

@@ -121,47 +121,35 @@ def safe_content_disposition(disposition_type: str, filename: str) -> str:
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application."""
-    from .mcp_server.server import build_mcp_server, compose_lifespan
+    """Create and configure the FastAPI application.
+
+    MCP (agent integration) is unwired for now — removed from the product
+    surface at the user's request, to be reconsidered later. The server code
+    (backend/mcp_server/, backend/routes/mcp_bindings.py) is left in place
+    unregistered rather than deleted, so re-adding it later is a matter of
+    restoring this mount/lifespan wiring and the router registration in
+    backend/routes/__init__.py, not rewriting it from scratch.
+    """
     from .mcp_server.context import ClientIdMiddleware
 
-    # Build the MCP app up-front so we can wire its lifespan into FastAPI's —
-    # FastMCP's Streamable HTTP transport only works if its session manager
-    # runs inside the parent ASGI lifespan.
-    mcp = build_mcp_server()
-    mcp_app = mcp.http_app(path="/", transport="http")
-
     @asynccontextmanager
-    async def voicebox_lifespan(app: FastAPI):
+    async def diarix_lifespan(app: FastAPI):
         await _run_startup(app)
         try:
             yield
         finally:
-            # Paired with _run_startup via try/finally: runs whether or
-            # not the nested MCP lifespan entered cleanly, so a partial
-            # startup still unloads whatever models were loaded.
             await _run_shutdown()
 
-    # compose_lifespan enters factories in order (voicebox startup →
-    # MCP startup) and exits in LIFO (MCP teardown first → models
-    # unload last). That ordering matters on shutdown: FastMCP's
-    # __aexit__ cancels in-flight session tasks, and we want that to
-    # happen *before* _run_shutdown yanks the TTS / Whisper / LLM
-    # models out from under any MCP request that was still generating.
-    lifespan = compose_lifespan(voicebox_lifespan, mcp_app.router.lifespan_context)
-
     application = FastAPI(
-        title="voicebox API",
+        title="Diarix API",
         description="Production-quality Qwen3-TTS voice cloning API",
         version=__version__,
-        lifespan=lifespan,
+        lifespan=diarix_lifespan,
     )
 
     _configure_cors(application)
     application.add_middleware(ClientIdMiddleware)
     register_routers(application)
-    application.mount("/mcp", mcp_app)
-    logger.info("MCP: mounted at /mcp")
     _mount_frontend(application)
 
     return application
@@ -172,6 +160,8 @@ def _configure_cors(application: FastAPI) -> None:
     default_origins = [
         "http://localhost:5173",  # Vite dev server
         "http://127.0.0.1:5173",
+        "http://localhost:17494",
+        "http://127.0.0.1:17494",
         "http://localhost:17493",
         "http://127.0.0.1:17493",
         "tauri://localhost",  # Tauri webview (macOS)
@@ -269,7 +259,7 @@ async def _run_startup(application: FastAPI) -> None:
     import platform
     import sys
 
-    logger.info("Voicebox v%s starting up", __version__)
+    logger.info("Diarix v%s starting up", __version__)
     logger.info(
         "Python %s on %s %s (%s)",
         sys.version.split()[0],
@@ -351,15 +341,15 @@ async def _run_startup(application: FastAPI) -> None:
 
 async def _run_shutdown() -> None:
     """Unload models on lifespan exit."""
-    logger.info("Voicebox server shutting down...")
+    logger.info("Diarix server shutting down...")
     try:
         tts.unload_tts_model()
     except Exception:
         logger.exception("Failed to unload TTS model")
     try:
-        transcribe.unload_whisper_model()
+        transcribe.unload_all_stt_models()
     except Exception:
-        logger.exception("Failed to unload Whisper model")
+        logger.exception("Failed to unload STT models")
     try:
         llm.unload_llm_model()
     except Exception:

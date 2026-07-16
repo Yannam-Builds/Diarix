@@ -9,6 +9,7 @@ Usage:
     python -m pytest backend/tests/test_rocm_build.py -v -m "slow"    # include E2E
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -26,7 +27,7 @@ class TestRocmBuildArgs:
     def captured_args(self):
         """Run build_server(rocm=True) with mocked PyInstaller and return args."""
         with (
-            patch("build_binary.PyInstaller.__main__.run") as mock_run,
+            patch("build_binary._run_pyinstaller") as mock_run,
             patch("build_binary.platform.system", return_value="Linux"),
             patch("build_binary.os.chdir"),
         ):
@@ -35,7 +36,7 @@ class TestRocmBuildArgs:
 
     def test_binary_name(self, captured_args):
         idx = captured_args.index("--name")
-        assert captured_args[idx + 1] == "voicebox-server-rocm"
+        assert captured_args[idx + 1] == "diarix-server-rocm"
 
     def test_pack_mode_is_onedir(self, captured_args):
         assert "--onedir" in captured_args
@@ -79,7 +80,12 @@ class TestRocmBuildCli:
 
 
 @pytest.mark.slow()
-@pytest.mark.skipif(sys.platform != "win32", reason="ROCm build E2E only runs on Windows")
+@pytest.mark.skipif(
+    sys.platform != "win32"
+    or sys.version_info[:2] != (3, 12)
+    or os.environ.get("RUN_ROCM_E2E") != "1",
+    reason="ROCm E2E requires Windows CPython 3.12 and RUN_ROCM_E2E=1",
+)
 class TestRocmBuildE2E:
     """
     True end-to-end build test.
@@ -91,8 +97,8 @@ class TestRocmBuildE2E:
         backend_dir = Path(__file__).parent.parent
         build_script = backend_dir / "build_binary.py"
         dist_dir = backend_dir / "dist"
-        binary_dir = dist_dir / "voicebox-server-rocm"
-        binary_exe = binary_dir / "voicebox-server-rocm.exe"
+        binary_dir = dist_dir / "diarix-server-rocm"
+        binary_exe = binary_dir / "diarix-server-rocm.exe"
 
         # Clean previous dist if it exists to ensure a fresh build
         if binary_dir.exists():

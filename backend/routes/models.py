@@ -17,6 +17,66 @@ from ..utils.tasks import get_task_manager
 router = APIRouter()
 
 
+def _shares_cache_with_map(configs) -> dict[str, list[str]]:
+    """Group model configs by hf_repo_id so the UI can label shared-checkpoint
+    entries instead of showing them as unrelated duplicates (e.g. WhisperX
+    Large v3 and Faster-Whisper Large v3 both resolve to the same CT2
+    checkpoint). Works for any future repo collision, not just this pair."""
+    by_repo: dict[str, list] = {}
+    for cfg in configs:
+        if not cfg.hf_repo_id:
+            continue
+        by_repo.setdefault(cfg.hf_repo_id, []).append(cfg)
+
+    result: dict[str, list[str]] = {}
+    for cfgs in by_repo.values():
+        if len(cfgs) < 2:
+            continue
+        for cfg in cfgs:
+            result[cfg.model_name] = [
+                other.display_name for other in cfgs if other.model_name != cfg.model_name
+            ]
+    return result
+
+
+@router.get("/models/catalog", response_model=models.ModelStatusListResponse)
+async def get_model_catalog():
+    """Return model metadata immediately without scanning disk or loading runtimes."""
+    from ..backends import get_all_model_configs
+
+    all_configs = get_all_model_configs()
+    shares_map = _shares_cache_with_map(all_configs)
+
+    return models.ModelStatusListResponse(
+        models=[
+            models.ModelStatus(
+                model_name=config.model_name,
+                display_name=config.display_name,
+                model_size=config.model_size,
+                hf_repo_id=config.hf_repo_id,
+                downloaded=False,
+                size_mb=float(config.size_mb) or None,
+                engine=config.engine,
+                modality=config.modality,
+                runtime_group=config.runtime_group,
+                capabilities=config.capabilities,
+                languages=config.languages,
+                description=config.description,
+                precision_options=config.precision_options,
+                default_precision=config.default_precision,
+                recommended=config.recommended,
+                min_vram_gb=config.min_vram_gb,
+                audio_input=config.audio_input,
+                audio_sample_rate=(config.audio_input.sample_rate_hz if config.audio_input else None),
+                audio_channels=(config.audio_input.channels if config.audio_input else None),
+                audio_format=(config.audio_input.container if config.audio_input else None),
+                shares_cache_with=shares_map.get(config.model_name, []),
+            )
+            for config in all_configs
+        ]
+    )
+
+
 def _get_dir_size(path: Path) -> int:
     """Get total size of a directory in bytes."""
     total = 0
@@ -243,12 +303,29 @@ async def get_model_status():
     from ..backends import get_all_model_configs, check_model_loaded
 
     registry_configs = get_all_model_configs()
+    shares_map = _shares_cache_with_map(registry_configs)
     model_configs = [
         {
             "model_name": cfg.model_name,
             "display_name": cfg.display_name,
             "hf_repo_id": cfg.hf_repo_id,
+            "shares_cache_with": shares_map.get(cfg.model_name, []),
             "model_size": cfg.model_size,
+            "estimated_size_mb": cfg.size_mb,
+            "engine": cfg.engine,
+            "modality": cfg.modality,
+            "runtime_group": cfg.runtime_group,
+            "capabilities": cfg.capabilities,
+            "languages": cfg.languages,
+            "description": cfg.description,
+            "precision_options": cfg.precision_options,
+            "default_precision": cfg.default_precision,
+            "recommended": cfg.recommended,
+            "min_vram_gb": cfg.min_vram_gb,
+            "audio_input": cfg.audio_input,
+            "audio_sample_rate": cfg.audio_input.sample_rate_hz if cfg.audio_input else None,
+            "audio_channels": cfg.audio_input.channels if cfg.audio_input else None,
+            "audio_format": cfg.audio_input.container if cfg.audio_input else None,
             "check_loaded": lambda c=cfg: check_model_loaded(c),
         }
         for cfg in registry_configs
@@ -269,7 +346,7 @@ async def get_model_status():
     for config in model_configs:
         try:
             downloaded = False
-            size_mb = None
+            size_mb = float(config["estimated_size_mb"]) or None
             loaded = False
 
             if cache_info:
@@ -280,7 +357,9 @@ async def get_model_status():
                         for rev in repo.revisions:
                             for f in rev.files:
                                 fname = f.file_name.lower()
-                                if fname.endswith((".safetensors", ".bin", ".pt", ".pth", ".npz")):
+                                if fname.endswith(
+                                    (".safetensors", ".bin", ".pt", ".pth", ".npz", ".nemo")
+                                ):
                                     has_model_weights = True
                                     break
                             if has_model_weights:
@@ -323,6 +402,7 @@ async def get_model_status():
                                     or any(snapshots_dir.rglob("*.pt"))
                                     or any(snapshots_dir.rglob("*.pth"))
                                     or any(snapshots_dir.rglob("*.npz"))
+                                    or any(snapshots_dir.rglob("*.nemo"))
                                 )
 
                             if has_model_files:
@@ -348,17 +428,33 @@ async def get_model_status():
 
             if is_downloading:
                 downloaded = False
-                size_mb = None
+                size_mb = float(config["estimated_size_mb"]) or None
 
             statuses.append(
                 models.ModelStatus(
                     model_name=config["model_name"],
                     display_name=config["display_name"],
+                    model_size=config["model_size"],
                     hf_repo_id=config["hf_repo_id"],
                     downloaded=downloaded,
                     downloading=is_downloading,
                     size_mb=size_mb,
                     loaded=loaded,
+                    engine=config["engine"],
+                    modality=config["modality"],
+                    runtime_group=config["runtime_group"],
+                    capabilities=config["capabilities"],
+                    languages=config["languages"],
+                    description=config["description"],
+                    precision_options=config["precision_options"],
+                    default_precision=config["default_precision"],
+                    recommended=config["recommended"],
+                    min_vram_gb=config["min_vram_gb"],
+                    audio_input=config["audio_input"],
+                    audio_sample_rate=config["audio_sample_rate"],
+                    audio_channels=config["audio_channels"],
+                    audio_format=config["audio_format"],
+                    shares_cache_with=config["shares_cache_with"],
                 )
             )
         except Exception:
@@ -373,11 +469,27 @@ async def get_model_status():
                 models.ModelStatus(
                     model_name=config["model_name"],
                     display_name=config["display_name"],
+                    model_size=config["model_size"],
                     hf_repo_id=config["hf_repo_id"],
                     downloaded=False,
                     downloading=is_downloading,
-                    size_mb=None,
+                    size_mb=float(config["estimated_size_mb"]) or None,
                     loaded=loaded,
+                    engine=config["engine"],
+                    modality=config["modality"],
+                    runtime_group=config["runtime_group"],
+                    capabilities=config["capabilities"],
+                    languages=config["languages"],
+                    description=config["description"],
+                    precision_options=config["precision_options"],
+                    default_precision=config["default_precision"],
+                    recommended=config["recommended"],
+                    min_vram_gb=config["min_vram_gb"],
+                    audio_input=config["audio_input"],
+                    audio_sample_rate=config["audio_sample_rate"],
+                    audio_channels=config["audio_channels"],
+                    audio_format=config["audio_format"],
+                    shares_cache_with=config["shares_cache_with"],
                 )
             )
 
@@ -403,6 +515,7 @@ async def trigger_model_download(request: models.ModelDownloadRequest):
             result = load_func()
             if asyncio.iscoroutine(result):
                 await result
+            progress_manager.mark_complete(request.model_name)
             task_manager.complete_download(request.model_name)
         except Exception as e:
             task_manager.error_download(request.model_name, str(e))

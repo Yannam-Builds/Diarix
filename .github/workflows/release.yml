@@ -58,14 +58,18 @@ jobs:
         if: contains(matrix.platform, 'ubuntu') || contains(matrix.platform, 'namespace')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf llvm-dev libasound2-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf llvm-dev libasound2-dev ffmpeg
 
       - name: Install LLVM (macOS)
         if: matrix.platform == 'macos-latest' || matrix.platform == 'macos-15-intel'
         run: |
-          brew install llvm@20
+          brew install llvm@20 ffmpeg
           echo "$(brew --prefix llvm@20)/bin" >> $GITHUB_PATH
           echo "LLVM_CONFIG=$(brew --prefix llvm@20)/bin/llvm-config" >> $GITHUB_ENV
+
+      - name: Install FFmpeg media tools (Windows)
+        if: matrix.platform == 'windows-latest'
+        run: choco install ffmpeg --yes --no-progress
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -113,8 +117,7 @@ jobs:
         shell: bash
         run: |
           cd backend
-          python build_binary.py
-          python build_binary.py --shim
+          python build_binary.py --require-media-tools
 
           # Get platform tuple
           PLATFORM=$(rustc --print host-tuple)
@@ -123,10 +126,10 @@ jobs:
           mkdir -p ../tauri/src-tauri/binaries
 
           # Copy with platform suffix
-          cp dist/voicebox-server.exe ../tauri/src-tauri/binaries/voicebox-server-${PLATFORM}.exe
-          cp dist/voicebox-mcp.exe ../tauri/src-tauri/binaries/voicebox-mcp-${PLATFORM}.exe
-          echo "Built voicebox-server-${PLATFORM}.exe"
-          echo "Built voicebox-mcp-${PLATFORM}.exe"
+          cp dist/diarix-server.exe ../tauri/src-tauri/binaries/diarix-server-${PLATFORM}.exe
+          echo "Built diarix-server-${PLATFORM}.exe"
+          # MCP shim (voicebox-mcp) intentionally not built: MCP is unwired
+          # from the backend for now (see backend/app.py create_app()).
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -277,6 +280,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install FFmpeg media tools
+        run: choco install ffmpeg --yes --no-progress
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -288,6 +294,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller
           pip install -r backend/requirements.txt
+          pip install -r backend/requirements-advanced-asr.txt
           pip install --no-deps chatterbox-tts
           pip install --no-deps hume-tada
 
@@ -309,13 +316,13 @@ jobs:
           # but not sm_120. Setting this env var causes torch.utils.cpp_extension
           # (and any JIT-compiled kernels) to target Blackwell GPUs as well.
           TORCH_CUDA_ARCH_LIST: "8.0;8.6;8.9;9.0;12.0+PTX"
-        run: python build_binary.py --cuda
+        run: python build_binary.py --cuda --require-media-tools
 
       - name: Package into server core + CUDA libs archives
         shell: bash
         run: |
           python scripts/package_cuda.py \
-            backend/dist/voicebox-server-cuda/ \
+            backend/dist/diarix-server-cuda/ \
             --output release-assets/ \
             --cuda-libs-version cu128-v1 \
             --torch-compat ">=2.7.0,<2.11.0"
@@ -325,8 +332,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-assets/voicebox-server-cuda.tar.gz
-            release-assets/voicebox-server-cuda.tar.gz.sha256
+            release-assets/diarix-server-cuda.tar.gz
+            release-assets/diarix-server-cuda.tar.gz.sha256
             release-assets/cuda-libs-cu128-v1.tar.gz
             release-assets/cuda-libs-cu128-v1.tar.gz.sha256
             release-assets/cuda-libs.json
@@ -337,8 +344,8 @@ jobs:
       - name: Upload onedir as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: voicebox-server-cuda-windows
-          path: backend/dist/voicebox-server-cuda/
+          name: diarix-server-cuda-windows
+          path: backend/dist/diarix-server-cuda/
           retention-days: 7
 
   build-rocm-windows:
@@ -348,6 +355,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install FFmpeg media tools
+        run: choco install ffmpeg --yes --no-progress
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -370,13 +380,13 @@ jobs:
         # build_binary.py --rocm pulls the official AMD Radeon torch + rocm_sdk
         # wheels (rocm-rel-7.2.1) itself when ROCm torch is not already present,
         # then restores the dev torch afterwards.
-        run: python build_binary.py --rocm
+        run: python build_binary.py --rocm --require-media-tools
 
       - name: Package into server core + ROCm libs archives
         shell: bash
         run: |
           python scripts/package_rocm.py \
-            backend/dist/voicebox-server-rocm/ \
+            backend/dist/diarix-server-rocm/ \
             --output release-assets/ \
             --rocm-libs-version rocm7.2-v1 \
             --torch-compat ">=2.9.0,<2.10.0"
@@ -386,8 +396,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release-assets/voicebox-server-rocm.tar.gz
-            release-assets/voicebox-server-rocm.tar.gz.sha256
+            release-assets/diarix-server-rocm.tar.gz
+            release-assets/diarix-server-rocm.tar.gz.sha256
             release-assets/rocm-libs-rocm7.2-v1.tar.gz
             release-assets/rocm-libs-rocm7.2-v1.tar.gz.sha256
             release-assets/rocm-libs.json
@@ -398,6 +408,6 @@ jobs:
       - name: Upload onedir as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: voicebox-server-rocm-windows
-          path: backend/dist/voicebox-server-rocm/
+          name: diarix-server-rocm-windows
+          path: backend/dist/diarix-server-rocm/
           retention-days: 7

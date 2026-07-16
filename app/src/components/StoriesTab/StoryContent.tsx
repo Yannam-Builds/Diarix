@@ -379,7 +379,7 @@ export function StoryContent() {
                 transition={{ duration: 0.2 }}
               >
                 <Link
-                  to="/"
+                  to="/voice-studio"
                   className="flex items-center gap-2 h-8 pl-1.5 pr-3 rounded-full bg-card border border-border hover:bg-muted/50 transition-all duration-200 cursor-pointer"
                 >
                   <div className="shrink-0 w-10 h-5 overflow-hidden flex items-center justify-center">

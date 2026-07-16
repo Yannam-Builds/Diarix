@@ -12,6 +12,11 @@
     "unknownError": "Erreur inconnue"
   },
   "nav": {
+    "transcribe": "Transcrire",
+    "voiceStudio": "Studio vocal",
+    "profiles": "Profils",
+    "history": "Historique",
+    "mcp": "MCP",
     "generate": "Générer",
     "stories": "Histoires",
     "captures": "Captures",
@@ -135,13 +140,13 @@
       },
       "inputMonitoring": {
         "label": "Autorisation de surveillance d'entrée",
-        "ready": "macOS permet à Voicebox de détecter votre raccourci global.",
-        "missing": "macOS doit autoriser Voicebox à détecter le raccourci global.",
+        "ready": "macOS permet à Diarix de détecter votre raccourci global.",
+        "missing": "macOS doit autoriser Diarix à détecter le raccourci global.",
         "openSettings": "Ouvrir les réglages"
       },
       "accessibility": {
         "label": "Autorisation d'accessibilité",
-        "ready": "Voicebox peut coller les transcriptions dans d'autres applications.",
+        "ready": "Diarix peut coller les transcriptions dans d'autres applications.",
         "missing": "Requis pour que les transcriptions puissent être collées dans l'application active.",
         "openSettings": "Ouvrir les réglages"
       }
@@ -149,19 +154,19 @@
     "permissions": {
       "accessibility": {
         "title": "Accordez l'autorisation d'accessibilité pour activer le collage automatique",
-        "body": "Voicebox a besoin de <path>Réglages Système → Confidentialité et Sécurité → Accessibilité</path> pour coller les transcriptions dans d'autres applications. Vos dictées arriveront quand même dans l'onglet Captures sans cela.",
+        "body": "Diarix a besoin de <path>Réglages Système → Confidentialité et Sécurité → Accessibilité</path> pour coller les transcriptions dans d'autres applications. Vos dictées arriveront quand même dans l'onglet Captures sans cela.",
         "openSettings": "Ouvrir les réglages",
         "recheck": "Je l'ai activé",
         "rechecking": "Vérification…",
-        "stillMissing": "Toujours pas détecté. macOS nécessite généralement de quitter et rouvrir Voicebox après avoir activé l'autorisation."
+        "stillMissing": "Toujours pas détecté. macOS nécessite généralement de quitter et rouvrir Diarix après avoir activé l'autorisation."
       },
       "inputMonitoring": {
         "title": "Accordez la surveillance d'entrée pour activer le raccourci global",
-        "body": "Voicebox a besoin de <path>Réglages Système → Confidentialité et Sécurité → Surveillance d'entrée</path> pour détecter votre combinaison de dictée. L'interrupteur est activé, mais macOS bloque les événements clavier tant que vous ne l'autorisez pas.",
+        "body": "Diarix a besoin de <path>Réglages Système → Confidentialité et Sécurité → Surveillance d'entrée</path> pour détecter votre combinaison de dictée. L'interrupteur est activé, mais macOS bloque les événements clavier tant que vous ne l'autorisez pas.",
         "openSettings": "Ouvrir les réglages",
         "recheck": "Je l'ai activé",
         "rechecking": "Vérification…",
-        "stillMissing": "Toujours pas détecté. macOS nécessite généralement de quitter et rouvrir Voicebox après avoir activé l'autorisation."
+        "stillMissing": "Toujours pas détecté. macOS nécessite généralement de quitter et rouvrir Diarix après avoir activé l'autorisation."
       }
     }
   },
@@ -748,7 +753,7 @@
     },
     "language": {
       "label": "Langue",
-      "description": "Choisissez la langue d'affichage de Voicebox."
+      "description": "Choisissez la langue d'affichage de Diarix."
     },
     "theme": {
       "label": "Thème",
@@ -764,7 +769,7 @@
       "discord": { "title": "Rejoindre le Discord", "subtitle": "Obtenez de l'aide et partagez des voix" },
       "serverUrl": {
         "title": "URL du serveur",
-        "description": "L'adresse de votre serveur Voicebox.",
+        "description": "L'adresse de votre serveur Diarix.",
         "invalidUrl": "Veuillez saisir une URL valide",
         "updatedTitle": "URL du serveur mise à jour",
         "updatedDescription": "Connecté à {{url}}"
@@ -819,7 +824,7 @@
       },
       "api": {
         "title": "Accès API",
-        "description": "Intégrez Voicebox dans votre flux de travail via l'API REST à <code>{{url}}</code>",
+        "description": "Intégrez Diarix dans votre flux de travail via l'API REST à <code>{{url}}</code>",
         "viewReference": "Voir la référence API complète",
         "endpoints": {
           "generate": "Générer de la parole",
@@ -908,7 +913,7 @@
         },
         "autoPaste": {
           "title": "Coller automatiquement dans le champ de texte actif",
-          "description": "Si un champ de texte est actif dans une autre application, collez-y directement. Voicebox sauvegarde et restaure le contenu de votre presse-papiers."
+          "description": "Si un champ de texte est actif dans une autre application, collez-y directement. Diarix sauvegarde et restaure le contenu de votre presse-papiers."
         }
       },
       "transcription": {
@@ -916,7 +921,7 @@
         "description": "Choisissez quel modèle de reconnaissance vocale est utilisé pour vos captures.",
         "model": {
           "title": "Modèle de transcription",
-          "description": "Whisper est fourni avec Voicebox et fonctionne entièrement sur votre machine.",
+          "description": "Whisper est fourni avec Diarix et fonctionne entièrement sur votre machine.",
           "base": "Whisper Base · 74M · {{tail}}",
           "small": "Whisper Small · 244M · {{tail}}",
           "medium": "Whisper Medium · 769M · {{tail}}",
@@ -992,7 +997,7 @@
       },
       "storage": {
         "title": "Stockage",
-        "description": "Les captures sont sauvegardées sous forme de paires audio/transcription dans votre répertoire de données Voicebox.",
+        "description": "Les captures sont sauvegardées sous forme de paires audio/transcription dans votre répertoire de données Diarix.",
         "retention": {
           "title": "Rétention",
           "description": "Durée de conservation des captures. S'applique à l'audio et aux transcriptions.",
@@ -1009,7 +1014,7 @@
       },
       "sidebar": {
         "aboutTitle": "À propos des Captures",
-        "aboutBody": "Maintenez un raccourci n'importe où sur votre machine, parlez, et Voicebox transforme votre voix en texte. Rejouez-la avec n'importe quelle voix clonée, collez-la dans n'importe quelle application, ou transmettez-la à votre agent de codage.",
+        "aboutBody": "Maintenez un raccourci n'importe où sur votre machine, parlez, et Diarix transforme votre voix en texte. Rejouez-la avec n'importe quelle voix clonée, collez-la dans n'importe quelle application, ou transmettez-la à votre agent de codage.",
         "differencesTitle": "Ce qui est différent",
         "local": {
           "title": "Entièrement local.",
@@ -1025,14 +1030,14 @@
         },
         "windowsCaveat": {
           "title": "Attention sur Windows",
-          "body": "Le raccourci ne fonctionne pas lorsque Voicebox ou une application en mode administrateur est active. En cours d'amélioration."
+          "body": "Le raccourci ne fonctionne pas lorsque Diarix ou une application en mode administrateur est active. En cours d'amélioration."
         }
       }
     },
     "mcp": {
       "install": {
         "title": "Installer dans votre agent",
-        "description": "Voicebox expose un serveur MCP local dès que l'application est ouverte. Collez l'un de ces extraits dans la configuration MCP de votre agent.",
+        "description": "Diarix expose un serveur MCP local dès que l'application est ouverte. Collez l'un de ces extraits dans la configuration MCP de votre agent.",
         "http": {
           "title": "HTTP (recommandé)",
           "description": "Pour les clients qui parlent HTTP MCP — Claude Code, Cursor, Windsurf, VS Code."
@@ -1073,7 +1078,7 @@
       },
       "sidebar": {
         "aboutTitle": "À propos de MCP",
-        "aboutBody": "Le Model Context Protocol permet à votre agent de codage IA — Claude Code, Cursor, Windsurf — d'appeler les outils de Voicebox. Parlez avec une voix clonée, transcrivez de l'audio, parcourez les captures.",
+        "aboutBody": "Le Model Context Protocol permet à votre agent de codage IA — Claude Code, Cursor, Windsurf — d'appeler les outils de Diarix. Parlez avec une voix clonée, transcrivez de l'audio, parcourez les captures.",
         "toolsTitle": "Outils disponibles",
         "tools": {
           "speak": "Prononcer un texte avec un profil vocal.",
@@ -1128,7 +1133,7 @@
         "switchCpu": "Échec du basculement vers CPU",
         "deleteCuda": "Échec de la suppression du backend CUDA"
       },
-      "footer": "Voicebox détecte et utilise automatiquement le meilleur GPU disponible sur votre système. Sur les Mac Apple Silicon, le backend MLX fonctionne nativement sur le Neural Engine et le GPU via Metal Performance Shaders (MPS), sans configuration supplémentaire. Sur Windows et Linux avec GPU NVIDIA, vous pouvez télécharger un backend CUDA optionnel pour l'inférence accélérée par le matériel. AMD ROCm, Intel XPU et DirectML sont également pris en charge là où disponibles via PyTorch. Quand aucun GPU n'est détecté, Voicebox utilise le CPU — tous les moteurs fonctionnent, mais plus lentement."
+      "footer": "Diarix détecte et utilise automatiquement le meilleur GPU disponible sur votre système. Sur les Mac Apple Silicon, le backend MLX fonctionne nativement sur le Neural Engine et le GPU via Metal Performance Shaders (MPS), sans configuration supplémentaire. Sur Windows et Linux avec GPU NVIDIA, vous pouvez télécharger un backend CUDA optionnel pour l'inférence accélérée par le matériel. AMD ROCm, Intel XPU et DirectML sont également pris en charge là où disponibles via PyTorch. Quand aucun GPU n'est détecté, Diarix utilise le CPU — tous les moteurs fonctionnent, mais plus lentement."
     },
     "logs": {
       "title": "Journaux du serveur",

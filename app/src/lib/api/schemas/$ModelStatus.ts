@@ -13,6 +13,8 @@ export const $ModelStatus = {
       type: 'string',
       isRequired: true,
     },
+    model_size: { type: 'string' },
+    hf_repo_id: { type: 'any-of', contains: [{ type: 'string' }, { type: 'null' }] },
     downloaded: {
       type: 'boolean',
       isRequired: true,
@@ -31,5 +33,19 @@ export const $ModelStatus = {
     loaded: {
       type: 'boolean',
     },
+    engine: { type: 'string' },
+    modality: { type: 'string' },
+    runtime_group: { type: 'string' },
+    capabilities: { type: 'array', contains: { type: 'string' } },
+    languages: { type: 'array', contains: { type: 'string' } },
+    description: { type: 'string' },
+    precision_options: { type: 'array', contains: { type: 'string' } },
+    default_precision: { type: 'any-of', contains: [{ type: 'string' }, { type: 'null' }] },
+    recommended: { type: 'boolean' },
+    min_vram_gb: { type: 'any-of', contains: [{ type: 'number' }, { type: 'null' }] },
+    audio_sample_rate: { type: 'any-of', contains: [{ type: 'number' }, { type: 'null' }] },
+    audio_channels: { type: 'any-of', contains: [{ type: 'number' }, { type: 'null' }] },
+    audio_format: { type: 'any-of', contains: [{ type: 'string' }, { type: 'null' }] },
+    shares_cache_with: { type: 'array', contains: { type: 'string' } },
   },
 } as const;

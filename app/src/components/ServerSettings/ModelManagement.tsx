@@ -151,7 +151,13 @@ export function ModelManagement() {
   const [selectedModel, setSelectedModel] = useState<ModelStatus | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const { data: modelStatus, isLoading } = useQuery({
+  const { data: modelCatalog } = useQuery({
+    queryKey: ['modelCatalog'],
+    queryFn: () => apiClient.getModelCatalog(),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  const { data: scannedModelStatus, isLoading: statusLoading } = useQuery({
     queryKey: ['modelStatus'],
     queryFn: async () => {
       const result = await apiClient.getModelStatus();
@@ -159,6 +165,8 @@ export function ModelManagement() {
     },
     refetchInterval: 5000,
   });
+  const modelStatus = scannedModelStatus ?? modelCatalog;
+  const isLoading = statusLoading && !modelCatalog;
 
   const { data: cacheDir } = useQuery({
     queryKey: ['modelsCacheDir'],
@@ -221,11 +229,13 @@ export function ModelManagement() {
     return map;
   }, [activeTasks]);
 
-  const handleDownloadComplete = useCallback(() => {
+  const handleDownloadComplete = useCallback(async () => {
     setDownloadingModel(null);
     setDownloadingDisplayName(null);
-    queryClient.invalidateQueries({ queryKey: ['modelStatus'] });
-    queryClient.invalidateQueries({ queryKey: ['activeTasks'] });
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ['modelStatus'], type: 'active' }),
+      queryClient.refetchQueries({ queryKey: ['activeTasks'], type: 'active' }),
+    ]);
   }, [queryClient]);
 
   const handleDownloadError = useCallback(
@@ -259,6 +269,11 @@ export function ModelManagement() {
   const handleDownload = async (modelName: string) => {
     setDismissedErrors((prev) => {
       const next = new Set(prev);
+      next.delete(modelName);
+      return next;
+    });
+    setLocalErrors((prev) => {
+      const next = new Map(prev);
       next.delete(modelName);
       return next;
     });
@@ -406,18 +421,9 @@ export function ModelManagement() {
     setDetailOpen(true);
   };
 
-  const voiceModels =
-    modelStatus?.models.filter(
-      (m) =>
-        m.model_name.startsWith('qwen-tts') ||
-        m.model_name.startsWith('qwen-custom-voice') ||
-        m.model_name.startsWith('luxtts') ||
-        m.model_name.startsWith('chatterbox') ||
-        m.model_name.startsWith('tada') ||
-        m.model_name.startsWith('kokoro'),
-    ) ?? [];
-  const whisperModels = modelStatus?.models.filter((m) => m.model_name.startsWith('whisper')) ?? [];
-  const llmModels = modelStatus?.models.filter((m) => m.model_name.startsWith('qwen3-')) ?? [];
+  const voiceModels = modelStatus?.models.filter((m) => m.modality === 'tts') ?? [];
+  const whisperModels = modelStatus?.models.filter((m) => m.modality === 'stt') ?? [];
+  const llmModels = modelStatus?.models.filter((m) => m.modality === 'llm') ?? [];
 
   // Build sections
   const sections: { label: string; models: ModelStatus[] }[] = [
@@ -563,7 +569,14 @@ export function ModelManagement() {
 
                       {/* Name + inline progress */}
                       <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium">{model.display_name}</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm font-medium truncate">{model.display_name}</span>
+                          {model.runtime_group !== 'core' && (
+                            <Badge variant="outline" className="h-5 text-[10px] shrink-0">
+                              Advanced ASR
+                            </Badge>
+                          )}
+                        </div>
                         {isDownloading &&
                           (() => {
                             const dl = downloadProgressMap.get(model.model_name);
@@ -580,6 +593,11 @@ export function ModelManagement() {
                               </div>
                             );
                           })()}
+                        {!isDownloading && model.shares_cache_with && model.shares_cache_with.length > 0 && (
+                          <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                            {t('models.sharesCacheWith', { names: model.shares_cache_with.join(', ') })}
+                          </div>
+                        )}
                       </div>
 
                       {/* Right side info */}
@@ -711,6 +729,16 @@ export function ModelManagement() {
                       {t('common.error')}
                     </Badge>
                   )}
+                  {freshSelectedModel.runtime_group !== 'core' && (
+                    <Badge variant="outline" className="text-xs">
+                      Advanced ASR runtime
+                    </Badge>
+                  )}
+                  {freshSelectedModel.recommended && (
+                    <Badge variant="secondary" className="text-xs">
+                      Recommended
+                    </Badge>
+                  )}
                 </div>
 
                 {/* HuggingFace model card info */}
@@ -722,10 +750,20 @@ export function ModelManagement() {
                 )}
 
                 {/* Description */}
-                {MODEL_DESCRIPTIONS[freshSelectedModel.model_name] && (
+                {(freshSelectedModel.description || MODEL_DESCRIPTIONS[freshSelectedModel.model_name]) && (
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    {MODEL_DESCRIPTIONS[freshSelectedModel.model_name]}
+                    {freshSelectedModel.description || MODEL_DESCRIPTIONS[freshSelectedModel.model_name]}
                   </p>
+                )}
+
+                {freshSelectedModel.capabilities.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {freshSelectedModel.capabilities.map((capability) => (
+                      <Badge key={capability} variant="outline" className="text-[10px] font-normal">
+                        {capability.split('_').join(' ')}
+                      </Badge>
+                    ))}
+                  </div>
                 )}
 
                 {hfModelInfo && (

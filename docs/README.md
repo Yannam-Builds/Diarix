@@ -1,4 +1,8 @@
-# fumadocs-ui-template
+# Diarix documentation
+
+Diarix is an independent fork built from
+[Voicebox](https://github.com/jamiepine/voicebox). Voicebox remains the upstream
+project; inherited API, MCP, and archive names are retained for compatibility.
 
 This is a Next.js application generated with
 [Create Fumadocs](https://github.com/fuma-nama/fumadocs).

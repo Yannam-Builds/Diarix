@@ -19,6 +19,7 @@ class ProgressManager:
     # Throttle settings to prevent overwhelming SSE clients
     THROTTLE_INTERVAL_SECONDS = 0.5  # Minimum time between updates
     THROTTLE_PROGRESS_DELTA = 1.0    # Minimum progress change (%) to force update
+    TERMINAL_STATUSES = {"complete", "error", "completed", "failed", "cancelled"}
     
     def __init__(self):
         self._progress: Dict[str, Dict] = {}
@@ -148,6 +149,44 @@ class ProgressManager:
         with self._lock:
             progress = self._progress.get(model_name)
             return progress.copy() if progress else None
+
+    def update_task_progress(
+        self,
+        task_id: str,
+        *,
+        status: str,
+        progress: float,
+        stage: str,
+        **fields,
+    ) -> None:
+        """Store and broadcast structured progress for a non-download task."""
+        import time
+
+        progress_pct = min(100.0, max(0.0, float(progress)))
+        progress_data = {
+            "task_id": task_id,
+            "status": status,
+            "progress": progress_pct,
+            "stage": stage,
+            "timestamp": datetime.now().isoformat(),
+            **fields,
+        }
+        with self._lock:
+            self._progress[task_id] = progress_data
+
+        current_time = time.time()
+        last_time = self._last_notify_time.get(task_id, 0)
+        last_progress = self._last_notify_progress.get(task_id, -100)
+        should_notify = (
+            status in self.TERMINAL_STATUSES
+            or current_time - last_time >= self.THROTTLE_INTERVAL_SECONDS
+            or abs(progress_pct - last_progress) >= self.THROTTLE_PROGRESS_DELTA
+        )
+        if not should_notify:
+            return
+        self._last_notify_time[task_id] = current_time
+        self._last_notify_progress[task_id] = progress_pct
+        self._notify_listeners_threadsafe(task_id, progress_data)
     
     def get_all_active(self) -> List[Dict]:
         """Get all active downloads (status is 'downloading' or 'extracting'). Thread-safe."""
@@ -187,7 +226,7 @@ class ProgressManager:
         
         return callback
     
-    async def subscribe(self, model_name: str):
+    async def subscribe(self, model_name: str, *, include_current: bool = False):
         """
         Subscribe to progress updates for a model.
 
@@ -220,9 +259,14 @@ class ProgressManager:
             
             if initial_progress:
                 status = initial_progress.get('status')
+                if include_current:
+                    logger.info(f"Sending current task progress for {model_name}: {status}")
+                    yield f"data: {json.dumps(initial_progress)}\n\n"
+                    if status in self.TERMINAL_STATUSES:
+                        return
                 # Only send initial progress if download is actually in progress
                 # Don't send old 'complete' or 'error' status from previous downloads
-                if status in ('downloading', 'extracting'):
+                elif status in ('downloading', 'extracting'):
                     logger.info(f"Sending initial progress for {model_name}: {status}")
                     yield f"data: {json.dumps(initial_progress)}\n\n"
                 else:
@@ -239,7 +283,7 @@ class ProgressManager:
                     yield f"data: {json.dumps(progress)}\n\n"
 
                     # Stop if complete or error
-                    if progress.get("status") in ("complete", "error"):
+                    if progress.get("status") in self.TERMINAL_STATUSES:
                         logger.info(f"Download {progress.get('status')} for {model_name}, closing SSE connection")
                         break
                 except asyncio.TimeoutError:

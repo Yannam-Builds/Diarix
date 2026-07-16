@@ -6,7 +6,7 @@ set -e
 # Determine platform
 PLATFORM=$(rustc --print host-tuple 2>/dev/null || echo "unknown")
 
-echo "Building Voicebox sidecars for platform: $PLATFORM"
+echo "Building Diarix sidecars for platform: $PLATFORM"
 
 # Build Python binary
 # Resolve PATH to absolute paths before changing directory
@@ -38,10 +38,10 @@ copy_sidecar() {
     fi
 }
 
-python build_binary.py
-copy_sidecar voicebox-server
+python build_binary.py --require-media-tools
+copy_sidecar diarix-server
 
-python build_binary.py --shim
-copy_sidecar voicebox-mcp
+# MCP shim (voicebox-mcp) intentionally not built: MCP is unwired from the
+# backend for now (see backend/app.py create_app()).
 
 echo "Build complete!"
