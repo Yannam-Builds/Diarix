@@ -42,7 +42,7 @@ Thumbs.db
 # User data and model caches
 data/
 !data/.gitkeep
-models/
+/models/
 model-cache/
 huggingface/
 
