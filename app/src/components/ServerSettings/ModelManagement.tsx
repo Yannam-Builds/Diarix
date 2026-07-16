@@ -125,6 +125,18 @@ function formatBytes(bytes: number): string {
   return `${(bytes / k ** i).toFixed(1)} ${sizes[i]}`;
 }
 
+function deduplicateSharedDownloads(models: ModelStatus[]): ModelStatus[] {
+  const byRepository = new Map<string, ModelStatus>();
+  for (const model of models) {
+    const key = model.hf_repo_id || model.model_name;
+    const existing = byRepository.get(key);
+    if (!existing || (!existing.recommended && model.recommended)) {
+      byRepository.set(key, model);
+    }
+  }
+  return [...byRepository.values()];
+}
+
 export function ModelManagement() {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -421,9 +433,15 @@ export function ModelManagement() {
     setDetailOpen(true);
   };
 
-  const voiceModels = modelStatus?.models.filter((m) => m.modality === 'tts') ?? [];
-  const whisperModels = modelStatus?.models.filter((m) => m.modality === 'stt') ?? [];
-  const llmModels = modelStatus?.models.filter((m) => m.modality === 'llm') ?? [];
+  const voiceModels = deduplicateSharedDownloads(
+    modelStatus?.models.filter((m) => m.modality === 'tts') ?? [],
+  );
+  const whisperModels = deduplicateSharedDownloads(
+    modelStatus?.models.filter((m) => m.modality === 'stt') ?? [],
+  );
+  const llmModels = deduplicateSharedDownloads(
+    modelStatus?.models.filter((m) => m.modality === 'llm') ?? [],
+  );
 
   // Build sections
   const sections: { label: string; models: ModelStatus[] }[] = [

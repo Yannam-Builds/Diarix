@@ -12,6 +12,7 @@ from ..base import (
     is_model_cached,
     materialize_windows_snapshot_links,
     model_load_progress,
+    native_windows_path,
 )
 from .common import (
     config_for_engine,
@@ -61,7 +62,7 @@ class FasterWhisperSTTBackend:
             )
             snapshot_path = materialize_windows_snapshot_links(snapshot_path)
             self.model = faster_whisper.WhisperModel(
-                str(snapshot_path),
+                native_windows_path(snapshot_path),
                 device=runtime_device,
                 compute_type=compute_type,
             )
