@@ -1,0 +1,7 @@
+;The comment below contains SFX script commands
+Title=Diarix Setup
+Path=%LOCALAPPDATA%\Diarix
+SavePath
+Silent=0
+Overwrite=1
+Setup=Diarix.exe

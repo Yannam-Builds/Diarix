@@ -1,0 +1,34 @@
+# Optional Windows CUDA speech runtime. These packages are intentionally kept
+# out of the core Voicebox server because they add several gigabytes and have
+# tighter CUDA/PyTorch constraints.
+whisperx==3.8.6
+faster-whisper>=1.1.0
+nemo_toolkit[asr]
+qwen-asr==0.0.6
+
+# Granite Speech uses its native Transformers integration. Parakeet TDT uses
+# the NeMo runtime above so Diarix only needs its .nemo checkpoint.
+# Keep the advanced runtime independent from the base app's conservative cap.
+# Qwen3-ASR now requires exactly 4.57.6 (was 4.57.3 when this pin was
+# written — confirmed via PyPI metadata 2026-07-16, qwen-asr 0.0.6 declares
+# transformers==4.57.6 with no range). nemo_toolkit[asr] only needs the
+# 4.57 line (~=4.57.0), so 4.57.6 satisfies both. Same patch line as the
+# previous pin, so Qwen3-TTS compatibility risk is low, but re-verify Qwen3
+# TTS generation after this bump since the whole point of exact-pinning here
+# is to catch that kind of silent breakage.
+transformers==4.57.6
+accelerate>=1.0.0
+sentencepiece
+soundfile>=0.12.0
+
+# NeMo's unconstrained dependency graph otherwise upgrades these past the
+# versions used by the shared audio/TTS runtime. The <2.0 numpy ceiling this
+# pin previously held is no longer satisfiable: current nemo_toolkit[asr]
+# releases on PyPI require numpy>=2.0, so pinning below that makes this file
+# literally uninstallable (confirmed 2026-07-16 — pip's resolver reports
+# ResolutionImpossible). The verified advanced-ASR runtime environment
+# (Z:\#####Transcription\Python311, live-tested against all registered STT
+# models) already runs numpy 2.4.4 / numba 0.64.0 successfully, so this pin
+# now tracks that proven combination instead of the stale <2.0 ceiling.
+numpy>=2.0.0,<3.0
+numba>=0.64.0
