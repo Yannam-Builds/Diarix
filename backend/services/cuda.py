@@ -27,7 +27,7 @@ from .. import __version__
 
 logger = logging.getLogger(__name__)
 
-GITHUB_RELEASES_URL = "https://github.com/jamiepine/voicebox/releases/download"
+GITHUB_RELEASES_URL = "https://github.com/Yannam-Builds/Diarix/releases/download"
 
 PROGRESS_KEY = "cuda-backend"
 
@@ -59,8 +59,8 @@ def get_cuda_dir() -> Path:
 def get_cuda_exe_name() -> str:
     """Platform-specific CUDA executable filename."""
     if sys.platform == "win32":
-        return "voicebox-server-cuda.exe"
-    return "voicebox-server-cuda"
+        return "diarix-server-cuda.exe"
+    return "diarix-server-cuda"
 
 
 def get_cuda_binary_path() -> Optional[Path]:
@@ -286,7 +286,7 @@ async def _download_cuda_binary_locked(version: Optional[str] = None):
     )
 
     base_url = f"{GITHUB_RELEASES_URL}/{version}"
-    server_archive = "voicebox-server-cuda.tar.gz"
+    server_archive = "diarix-server-cuda.tar.gz"
     libs_archive = f"cuda-libs-{CUDA_LIBS_VERSION}.tar.gz"
 
     try:
@@ -368,9 +368,9 @@ def get_cuda_binary_version() -> Optional[str]:
             timeout=30,
             cwd=str(cuda_path.parent),  # Run from the onedir directory
         )
-        # Output format: "voicebox-server 0.3.0"
+        # Output format: "diarix-server 0.1.0-alpha.1"
         for line in result.stdout.strip().splitlines():
-            if "voicebox-server" in line:
+            if "diarix-server" in line:
                 return line.split()[-1]
     except Exception as e:
         logger.warning(f"Could not get CUDA binary version: {e}")

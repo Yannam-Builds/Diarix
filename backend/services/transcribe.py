@@ -7,6 +7,7 @@ import asyncio
 from collections.abc import Callable
 
 from ..backends import (
+    ModelConfig,
     STTBackend,
     get_stt_backend,
     get_stt_backend_for_engine,
@@ -14,6 +15,37 @@ from ..backends import (
     unload_all_stt_backends,
 )
 from .model_lifecycle import stt_model_lifecycle
+
+
+def default_stt_language(model_config: ModelConfig) -> str:
+    """Return the safest valid default for a model's declared language contract."""
+    if "language_detection" in model_config.capabilities:
+        return "auto"
+    supported = [code.strip().lower() for code in model_config.languages if code.strip()]
+    if not supported:
+        raise ValueError(f"{model_config.display_name} does not declare any supported languages.")
+    return supported[0]
+
+
+def resolve_stt_language(model_config: ModelConfig, language: str | None) -> str:
+    """Validate a language hint against the selected model's real capabilities."""
+    requested = (language or "auto").strip().lower() or "auto"
+    supported = {code.strip().lower() for code in model_config.languages if code.strip()}
+    if requested == "auto":
+        if "language_detection" in model_config.capabilities:
+            return "auto"
+        if len(supported) == 1:
+            return next(iter(supported))
+        raise ValueError(
+            f"{model_config.display_name} requires an explicit language: "
+            f"{', '.join(sorted(supported))}."
+        )
+    if requested not in supported:
+        raise ValueError(
+            f"Language '{requested}' is not supported by {model_config.display_name}. "
+            f"Choose one of: {', '.join(sorted(supported))}."
+        )
+    return requested
 
 
 def get_whisper_model() -> STTBackend:
@@ -75,7 +107,8 @@ async def transcribe_audio(
     receives the final timestamped segment list from engines that have one.
     """
     _backend, config = get_stt_model(model)
-    normalized_language = None if not language or language == "auto" else language
+    resolved_language = resolve_stt_language(config, language)
+    normalized_language = None if resolved_language == "auto" else resolved_language
     async with stt_model_lifecycle.use_model(config) as backend:
         text = await await_stt_operation(
             backend.transcribe(

@@ -309,6 +309,16 @@ def build_server(cuda=False, rocm=False, require_media_tools=False):
             "--hidden-import",
             "backend.backends.stt.qwen_backend",
             "--hidden-import",
+            "backend.backends.stt.transcribe_cpp_backend",
+            "--collect-all",
+            "transcribe_cpp",
+            "--collect-all",
+            "transcribe_cpp_native",
+            "--copy-metadata",
+            "transcribe-cpp",
+            "--copy-metadata",
+            "transcribe-cpp-native",
+            "--hidden-import",
             "backend.backends.qwen_custom_voice_backend",
             "--hidden-import",
             "backend.utils.audio",
@@ -504,26 +514,6 @@ def build_server(cuda=False, rocm=False, require_media_tools=False):
             "unidic_lite",
             "--hidden-import",
             "loguru",
-            # MCP server — Streamable-HTTP endpoint and the 4 voicebox.* tools.
-            # FastMCP pulls in a chain of deps (mcp, cyclopts, openapi-pydantic,
-            # etc.) that don't auto-discover cleanly under PyInstaller, so we
-            # collect them whole. Small compared to torch.
-            "--hidden-import",
-            "backend.mcp_server",
-            "--hidden-import",
-            "backend.mcp_server.server",
-            "--hidden-import",
-            "backend.mcp_server.tools",
-            "--hidden-import",
-            "backend.mcp_server.context",
-            "--hidden-import",
-            "backend.mcp_server.resolve",
-            "--hidden-import",
-            "backend.mcp_server.events",
-            "--collect-all",
-            "fastmcp",
-            "--collect-all",
-            "mcp",
             "--hidden-import",
             "sse_starlette",
         ]
@@ -563,6 +553,10 @@ def build_server(cuda=False, rocm=False, require_media_tools=False):
                     "cuda.bindings.cyruntime",
                     "--collect-all",
                     "qwen_asr",
+                    "--collect-all",
+                    "transcribe_cpp_native_cu12",
+                    "--copy-metadata",
+                    "transcribe-cpp-native-cu12",
                     # qwen-asr imports Nagisa's forced aligner at module load.
                     # Nagisa 0.2.x relies on sibling modules being available as
                     # physical source files; hook-nagisa.py selects that mode.
@@ -917,98 +911,8 @@ def build_server(cuda=False, rocm=False, require_media_tools=False):
     logger.info("Binary built in %s", backend_dir / "dist" / binary_name)
 
 
-def build_shim():
-    """Build the voicebox-mcp stdio shim as a tiny standalone binary.
-
-    This is the bridge for MCP clients that only speak stdio — it proxies
-    JSON-RPC to the main diarix-server's /mcp endpoint. Keep it small: no
-    torch, no ML deps, just httpx + asyncio.
-    """
-    backend_dir = Path(__file__).parent
-
-    args = [
-        "mcp_shim/__main__.py",
-        "--onefile",
-        "--name",
-        "voicebox-mcp",
-        # Stdio-only — no console hiding needed on Windows since the parent
-        # MCP client is spawning this as a child process and wants stdio.
-        "--hidden-import",
-        "backend.mcp_shim",
-        "--hidden-import",
-        "backend.mcp_shim.__main__",
-        "--hidden-import",
-        "httpx",
-        "--hidden-import",
-        "httpx._transports.default",
-        "--hidden-import",
-        "anyio",
-        # Exclude everything heavy that httpx/asyncio don't actually need so
-        # the binary stays tiny (~15 MB instead of ~400 MB).
-        "--exclude-module",
-        "torch",
-        "--exclude-module",
-        "transformers",
-        "--exclude-module",
-        "mlx",
-        "--exclude-module",
-        "mlx_audio",
-        "--exclude-module",
-        "mlx_lm",
-        "--exclude-module",
-        "qwen_tts",
-        "--exclude-module",
-        "chatterbox",
-        "--exclude-module",
-        "zipvoice",
-        "--exclude-module",
-        "tada",
-        "--exclude-module",
-        "kokoro",
-        "--exclude-module",
-        "misaki",
-        "--exclude-module",
-        "spacy",
-        "--exclude-module",
-        "librosa",
-        "--exclude-module",
-        "numba",
-        "--exclude-module",
-        "numpy",
-        "--exclude-module",
-        "pedalboard",
-        "--exclude-module",
-        "fastapi",
-        "--exclude-module",
-        "uvicorn",
-        "--exclude-module",
-        "sqlalchemy",
-        "--exclude-module",
-        "fastmcp",
-        "--exclude-module",
-        "mcp",
-    ]
-
-    dist_dir = str(backend_dir / "dist")
-    build_dir = str(backend_dir / "build")
-    args.extend(
-        [
-            "--distpath",
-            dist_dir,
-            "--workpath",
-            build_dir,
-            "--noconfirm",
-            "--clean",
-        ]
-    )
-
-    os.chdir(backend_dir)
-    _run_pyinstaller(args)
-    logger.info("Shim built: %s", backend_dir / "dist" / "voicebox-mcp")
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Build voicebox binaries")
+    parser = argparse.ArgumentParser(description="Build Diarix backend binaries")
     parser.add_argument(
         "--cuda",
         action="store_true",
@@ -1020,25 +924,16 @@ if __name__ == "__main__":
         help="Build ROCm-enabled binary (diarix-server-rocm) for AMD GPUs",
     )
     parser.add_argument(
-        "--shim",
-        action="store_true",
-        help="Build the voicebox-mcp stdio shim binary instead of the server",
-    )
-    parser.add_argument(
         "--require-media-tools",
         action="store_true",
         help="Fail unless FFmpeg and FFprobe can be bundled under the server's tools directory",
     )
     cli_args = parser.parse_args()
     try:
-        if cli_args.shim:
-            build_shim()
-        else:
-            build_server(
-                cuda=cli_args.cuda,
-                rocm=cli_args.rocm,
-                require_media_tools=cli_args.require_media_tools,
-            )
+        build_server(
+            cuda=cli_args.cuda,
+            rocm=cli_args.rocm,
+            require_media_tools=cli_args.require_media_tools,
+        )
     except MediaToolPackagingError as exc:
         parser.exit(2, f"Media tool packaging error: {exc}\n")
-

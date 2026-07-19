@@ -1,4 +1,4 @@
-name: CI
+name: Alpha quality gate
 
 on:
   pull_request:
@@ -6,21 +6,49 @@ on:
     branches:
       - main
 
+concurrency:
+  group: alpha-quality-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  frontend-quality:
-    runs-on: ubuntu-latest
+  desktop-quality:
+    runs-on: windows-latest
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
 
-      - name: Install dependencies
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./tauri/src-tauri -> target"
+
+      - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
 
-      - name: Typecheck app + web
-        run: bun run typecheck
+      - name: Verify alpha contracts
+        run: bun run verify:alpha
 
-      - name: Build web smoke test
-        run: bun run build:web
+      - name: Typecheck and build desktop UI
+        run: |
+          bun run typecheck
+          bun run --cwd app build
+
+      - name: Compile Python sources
+        run: python -m compileall -q backend
+
+      - name: Check native shell
+        run: cargo check --manifest-path tauri/src-tauri/Cargo.toml

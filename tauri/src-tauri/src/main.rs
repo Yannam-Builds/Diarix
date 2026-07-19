@@ -14,14 +14,15 @@ mod key_codes;
 mod keyboard_layout;
 mod speak_monitor;
 mod synthetic_keys;
+#[cfg(desktop)]
+mod tray;
 
 use std::sync::Mutex;
 use tauri::{command, State, Manager, WindowEvent, Emitter, Listener, RunEvent, WebviewUrl, WebviewWindowBuilder, PhysicalPosition};
 use tauri_plugin_shell::ShellExt;
-use tokio::sync::mpsc;
 
 pub const DICTATE_WINDOW_LABEL: &str = "dictate";
-const DICTATE_WINDOW_WIDTH: f64 = 420.0;
+const DICTATE_WINDOW_WIDTH: f64 = 720.0;
 const DICTATE_WINDOW_HEIGHT: f64 = 64.0;
 
 /// Create the floating dictate webview hidden. The HotkeyMonitor shows it on
@@ -1324,6 +1325,18 @@ async fn paste_final_text(
     Ok(true)
 }
 
+/// Put a transcript on the system clipboard without synthesising a paste.
+///
+/// The tray's "Copy last transcript" action uses this native path because
+/// clipboard writes from a hidden webview may be rejected without focus.
+#[command]
+fn copy_text_to_clipboard(text: String) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Err("Cannot copy an empty transcript".into());
+    }
+    clipboard::write_text(&text).map(|_| ())
+}
+
 /// Inspect the currently focused UI element. Returns the owning app's PID,
 /// bundle id, and AX role. Useful for sanity-checking the focus pipeline
 /// before committing to a paste.
@@ -1516,6 +1529,7 @@ pub fn run() {
                 });
 
                 ensure_dictate_window(app.handle());
+                tray::build(app.handle())?;
                 speak_monitor::spawn_speak_monitor(app.handle().clone());
             }
 
@@ -1596,57 +1610,26 @@ pub fn run() {
             check_input_monitoring_permission,
             open_accessibility_settings,
             open_input_monitoring_settings,
+            copy_text_to_clipboard,
             paste_final_text,
             enable_hotkey,
             disable_hotkey,
-            update_chord_bindings
+            update_chord_bindings,
+            tray::set_tray_state,
+            tray::set_tray_models
         ])
-        .on_window_event({
-            let closing = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-            move |window, event| {
+        .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                // If we're already in the close flow, let it proceed
-                if closing.load(std::sync::atomic::Ordering::SeqCst) {
-                    return;
-                }
-                closing.store(true, std::sync::atomic::Ordering::SeqCst);
-
-                // Prevent automatic close so frontend can clean up
                 api.prevent_close();
-
-                // Emit event to frontend to check setting and stop server if needed
-                let app_handle = window.app_handle();
-
-                if let Err(e) = app_handle.emit("window-close-requested", ()) {
-                    eprintln!("Failed to emit window-close-requested event: {}", e);
-                    window.close().ok();
-                    return;
+                if window.label() == DICTATE_WINDOW_LABEL {
+                    let _ = window.set_ignore_cursor_events(true);
+                    let _ = window.set_position(PhysicalPosition::new(-10_000, -10_000));
+                    let _ = window.hide();
+                } else {
+                    let _ = window.hide();
                 }
-
-                // Set up listener for frontend response
-                let window_for_close = window.clone();
-                let closing_for_timeout = closing.clone();
-                let (tx, mut rx) = mpsc::unbounded_channel::<()>();
-
-                let listener_id = window.listen("window-close-allowed", move |_| {
-                    let _ = tx.send(());
-                });
-
-                tauri::async_runtime::spawn(async move {
-                    tokio::select! {
-                        _ = rx.recv() => {
-                            window_for_close.close().ok();
-                        }
-                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => {
-                            eprintln!("Window close timeout, closing anyway");
-                            window_for_close.close().ok();
-                        }
-                    }
-                    window_for_close.unlisten(listener_id);
-                    closing_for_timeout.store(false, std::sync::atomic::Ordering::SeqCst);
-                });
             }
-        }})
+        })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {

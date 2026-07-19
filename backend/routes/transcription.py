@@ -9,8 +9,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from .. import models
-from ..backends import resolve_stt_config
-from ..backends.base import is_model_cached
+from ..backends import is_model_config_cached, resolve_stt_config
 from ..services import transcribe
 from ..services.media_ingestion import (
     MediaIngestionError,
@@ -225,7 +224,7 @@ async def transcribe_audio(
             stt_backend.is_loaded()
             and getattr(stt_backend, "model_size", None) == model_config.model_size
         )
-        if not already_loaded and not is_model_cached(model_config.hf_repo_id):
+        if not already_loaded and not is_model_config_cached(model_config):
             progress_model_name = model_config.model_name
             task_manager = get_task_manager()
 

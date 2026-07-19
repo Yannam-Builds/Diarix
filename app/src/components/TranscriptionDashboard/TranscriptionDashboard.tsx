@@ -30,6 +30,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
 import type { TranscriptionJob } from '@/lib/api/types';
 import { cn } from '@/lib/utils/cn';
+import { sttLanguageOptions } from '@/lib/utils/sttModels';
 import { usePlatform } from '@/platform/PlatformContext';
 
 const ACCEPTED_MEDIA =
@@ -56,18 +57,6 @@ const TERMINAL_STATUSES = new Set([
   'cancelled',
   'canceled',
 ]);
-
-const LANGUAGE_NAME_OVERRIDES: Record<string, string> = {
-  fil: 'Filipino',
-  jw: 'Javanese',
-  yue: 'Cantonese',
-};
-
-const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
-
-function languageLabel(code: string): string {
-  return LANGUAGE_NAME_OVERRIDES[code] ?? languageNames.of(code) ?? code.toUpperCase();
-}
 
 interface QueuedFile {
   id: string;
@@ -223,8 +212,6 @@ export function TranscriptionDashboard() {
     selectedModel?.precision_options && selectedModel.precision_options.length > 0
       ? selectedModel.precision_options
       : ['default'];
-  const supportsLanguageDetection =
-    selectedModel?.capabilities.includes('language_detection') ?? false;
   // Timestamped exports and silence-based paragraphs need real segment
   // timestamps. Only the CTranslate2 engines report them (segment_timestamps
   // on Faster-Whisper, alignment on WhisperX) — NeMo's word_timestamps
@@ -235,14 +222,8 @@ export function TranscriptionDashboard() {
     ),
   );
   const languageOptions = useMemo(() => {
-    const supported = (selectedModel?.languages ?? []).filter(
-      (code) => code !== 'multilingual' && code !== 'auto',
-    );
-    const options = supported.map((code) => ({ value: code, label: languageLabel(code) }));
-    return supportsLanguageDetection
-      ? [{ value: 'auto', label: 'Detect automatically' }, ...options]
-      : options;
-  }, [selectedModel?.languages, supportsLanguageDetection]);
+    return sttLanguageOptions(selectedModel);
+  }, [selectedModel]);
 
   useEffect(() => {
     if (

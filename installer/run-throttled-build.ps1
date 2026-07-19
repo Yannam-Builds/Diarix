@@ -1,6 +1,6 @@
-# Orchestrates the full Diarix 0.1.0 build with a ~70% CPU cap:
-# every top-level build process runs at BelowNormal priority with a
-# 14-of-20-logical-processor affinity mask (0x3FFF); children inherit both.
+# Orchestrates the full Diarix 0.1.0 build with a 25% CPU cap. Every
+# top-level build process receives a dynamically calculated affinity mask;
+# children inherit it.
 # Logs land in installer\build-logs\. Run installer\build-diarix-setup.ps1's
 # final ISCC step separately once Inno Setup 6 is installed.
 
@@ -8,14 +8,20 @@ $ErrorActionPreference = 'Stop'
 
 $RepoRoot   = Split-Path -Parent $PSScriptRoot
 $Toolchains = 'Z:\Diarix Studio\Toolchains'
-$CudaPython = 'Z:\#####Transcription\Python311\python.exe'
+$CudaPython = 'Z:\Diarix Studio\diarix-cuda-venv\Scripts\python.exe'
 $SysPython  = "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe"
 $VenvDir    = "$RepoRoot\backend\venv"
 $VenvPython = "$VenvDir\Scripts\python.exe"
 $LogDir     = "$RepoRoot\installer\build-logs"
 $PayloadDir = 'Z:\Diarix Studio\Diarix Setup Payload 0.1.0'
 
-$AffinityMask = 0x3FFF   # 14 of 20 logical processors ~= 70%
+$BuildCpuPercent = 25
+$BuildProcessors = [Math]::Max(1, [Math]::Floor([Environment]::ProcessorCount * ($BuildCpuPercent / 100)))
+$AffinityMask = if ($BuildProcessors -ge 63) {
+    [Int64]::MaxValue
+} else {
+    ([Int64]1 -shl $BuildProcessors) - 1
+}
 
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 
@@ -55,7 +61,6 @@ function Invoke-Throttled {
     [void]$proc.Start()
 
     try {
-        $proc.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::BelowNormal
         $proc.ProcessorAffinity = [IntPtr]$AffinityMask
     } catch {
         Write-Warning "Could not throttle ${Name}: $_"
@@ -99,8 +104,6 @@ Invoke-Throttled 'cuda-self-test' "$RepoRoot\backend\dist\diarix-server-cuda\dia
 $triple = (& "$Toolchains\cargo\bin\rustc.exe" --print host-tuple).Trim()
 New-Item -ItemType Directory -Force "$RepoRoot\tauri\src-tauri\binaries" | Out-Null
 Copy-Item "$RepoRoot\backend\dist\diarix-server.exe" "$RepoRoot\tauri\src-tauri\binaries\diarix-server-$triple.exe" -Force
-# MCP shim (voicebox-mcp) intentionally not built or bundled: MCP is
-# unwired from the backend for now (see backend/app.py create_app()).
 Invoke-Throttled 'bun-install' "$Toolchains\bun\node_modules\bun\bin\bun.exe" @('install') $RepoRoot
 Invoke-Throttled 'tauri-build' "$Toolchains\bun\node_modules\bun\bin\bun.exe" @('tauri', 'build', '--no-bundle') "$RepoRoot\tauri"
 

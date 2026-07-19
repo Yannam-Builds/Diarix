@@ -121,16 +121,7 @@ def safe_content_disposition(disposition_type: str, filename: str) -> str:
 
 
 def create_app() -> FastAPI:
-    """Create and configure the FastAPI application.
-
-    MCP (agent integration) is unwired for now — removed from the product
-    surface at the user's request, to be reconsidered later. The server code
-    (backend/mcp_server/, backend/routes/mcp_bindings.py) is left in place
-    unregistered rather than deleted, so re-adding it later is a matter of
-    restoring this mount/lifespan wiring and the router registration in
-    backend/routes/__init__.py, not rewriting it from scratch.
-    """
-    from .mcp_server.context import ClientIdMiddleware
+    """Create and configure the local Diarix API."""
 
     @asynccontextmanager
     async def diarix_lifespan(app: FastAPI):
@@ -142,13 +133,12 @@ def create_app() -> FastAPI:
 
     application = FastAPI(
         title="Diarix API",
-        description="Production-quality Qwen3-TTS voice cloning API",
+        description="Local transcription, speech generation, and refinement API",
         version=__version__,
         lifespan=diarix_lifespan,
     )
 
     _configure_cors(application)
-    application.add_middleware(ClientIdMiddleware)
     register_routers(application)
     _mount_frontend(application)
 

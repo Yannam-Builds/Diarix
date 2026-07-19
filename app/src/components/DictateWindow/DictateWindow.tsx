@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CapturePill } from '@/components/CapturePill/CapturePill';
 import { apiClient } from '@/lib/api/client';
 import type { FocusSnapshot } from '@/lib/api/types';
@@ -70,6 +70,103 @@ export function DictateWindow() {
   // would thrash the Tauri event bridge.
   const sessionRef = useRef(session);
   sessionRef.current = session;
+  const trayActionBusyRef = useRef(false);
+
+  const syncTrayModels = useCallback(async () => {
+    try {
+      const [status, settings] = await Promise.all([
+        apiClient.getModelStatus(),
+        apiClient.getCaptureSettings(),
+      ]);
+      const models = status.models
+        .filter((model) => model.modality === 'stt' && model.downloaded)
+        .sort((a, b) => a.display_name.localeCompare(b.display_name))
+        .map((model) => ({
+          modelName: model.model_name,
+          displayName: model.display_name,
+          loaded: model.loaded,
+        }));
+      await invoke('set_tray_models', {
+        models,
+        currentModel: settings.stt_model,
+      });
+    } catch {
+      // Web preview mode and the short backend-startup window have no tray
+      // context to update. The next periodic sync repairs it automatically.
+    }
+  }, []);
+
+  useEffect(() => {
+    void syncTrayModels();
+    const interval = window.setInterval(() => {
+      void syncTrayModels();
+    }, 15_000);
+
+    const unlistens: Promise<UnlistenFn>[] = [];
+    unlistens.push(
+      listen('dictate:copy-last-transcript', async () => {
+        if (trayActionBusyRef.current) return;
+        trayActionBusyRef.current = true;
+        try {
+          const history = await apiClient.listCaptures(1);
+          const latest = history.items[0];
+          const text =
+            latest?.transcript_refined?.trim() || latest?.transcript_raw?.trim() || '';
+          if (text) {
+            await invoke('copy_text_to_clipboard', { text });
+          }
+        } catch (error) {
+          console.warn('[tray] failed to copy the last transcript:', error);
+        } finally {
+          trayActionBusyRef.current = false;
+        }
+      }),
+    );
+    unlistens.push(
+      listen('dictate:unload-model', async () => {
+        if (trayActionBusyRef.current) return;
+        trayActionBusyRef.current = true;
+        try {
+          const settings = await apiClient.getCaptureSettings();
+          await apiClient.unloadModel(settings.stt_model);
+          await syncTrayModels();
+        } catch (error) {
+          console.warn('[tray] failed to unload the dictation model:', error);
+        } finally {
+          trayActionBusyRef.current = false;
+        }
+      }),
+    );
+    unlistens.push(
+      listen<{ modelName?: string }>('dictate:select-model', async (event) => {
+        const modelName = event.payload?.modelName?.trim();
+        if (!modelName || trayActionBusyRef.current) return;
+        trayActionBusyRef.current = true;
+        try {
+          const updated = await apiClient.updateCaptureSettings({
+            stt_model: modelName,
+          });
+          await emit('capture:settings-updated', { settings: updated });
+          if (updated.model_unload_timeout_seconds !== 0) {
+            await apiClient.warmCaptureModel();
+          }
+          await syncTrayModels();
+        } catch (error) {
+          console.warn('[tray] failed to switch the dictation model:', error);
+          await syncTrayModels();
+        } finally {
+          trayActionBusyRef.current = false;
+        }
+      }),
+    );
+
+    return () => {
+      window.clearInterval(interval);
+      for (const pending of unlistens) {
+        pending.then((unlisten) => unlisten()).catch(() => {});
+      }
+    };
+  }, [syncTrayModels]);
 
   useEffect(() => {
     const unlistens: Promise<UnlistenFn>[] = [];
@@ -82,6 +179,12 @@ export function DictateWindow() {
     unlistens.push(
       listen('dictate:stop', () => {
         if (sessionRef.current.isRecording) sessionRef.current.stopRecording();
+      }),
+    );
+    unlistens.push(
+      listen('dictate:cancel', () => {
+        focusRef.current = null;
+        sessionRef.current.cancelCurrent();
       }),
     );
     return () => {
@@ -244,6 +347,11 @@ export function DictateWindow() {
         }, 15_000);
       }),
     );
+    unlistens.push(
+      listen('dictate:speak-cancel', () => {
+        dismissSpeak();
+      }),
+    );
 
     return () => {
       for (const p of unlistens) p.then((fn) => fn()).catch(() => {});
@@ -279,6 +387,25 @@ export function DictateWindow() {
     }
   }, [effectiveState]);
 
+  useEffect(() => {
+    const trayState =
+      effectiveState === 'recording'
+        ? 'recording'
+        : effectiveState === 'transcribing' || effectiveState === 'refining'
+          ? 'transcribing'
+          : effectiveState === 'speaking'
+            ? 'speaking'
+            : effectiveState === 'error'
+              ? 'error'
+              : 'idle';
+    invoke('set_tray_state', { state: trayState }).catch(() => {
+      /* Web preview mode has no native tray. */
+    });
+    if (trayState === 'idle') {
+      void syncTrayModels();
+    }
+  }, [effectiveState, syncTrayModels]);
+
   return (
     <div
       className="h-screen w-screen flex items-center justify-center px-3"
@@ -288,6 +415,7 @@ export function DictateWindow() {
         <CapturePill
           state={effectiveState}
           elapsedMs={effectiveElapsed}
+          liveText={effectiveState === 'recording' ? session.liveTranscript : undefined}
           errorMessage={session.errorMessage}
           onDismiss={session.dismissError}
           onStop={session.isRecording ? session.stopRecording : undefined}

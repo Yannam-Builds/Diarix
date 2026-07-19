@@ -128,9 +128,6 @@ jobs:
           # Copy with platform suffix
           cp dist/diarix-server.exe ../tauri/src-tauri/binaries/diarix-server-${PLATFORM}.exe
           echo "Built diarix-server-${PLATFORM}.exe"
-          # MCP shim (voicebox-mcp) intentionally not built: MCP is unwired
-          # from the backend for now (see backend/app.py create_app()).
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
@@ -225,10 +222,10 @@ jobs:
         with:
           projectPath: tauri
           tagName: v__VERSION__
-          releaseName: "voicebox v__VERSION__"
+          releaseName: "Diarix v__VERSION__"
           releaseBody: ${{ steps.changelog.outputs.notes }}
           releaseDraft: true
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           args: ${{ matrix.args }}
           includeUpdaterJson: true
 

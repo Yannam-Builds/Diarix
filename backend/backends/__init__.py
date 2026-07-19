@@ -102,6 +102,9 @@ class ModelConfig:
     recommended: bool = False
     min_vram_gb: Optional[float] = None
     audio_input: Optional[AudioInputSpec] = None
+    artifact_filename: Optional[str] = None
+    base_model_id: Optional[str] = None
+    source_license: Optional[str] = None
 
 
 def _stt_model_config(**kwargs) -> ModelConfig:
@@ -764,6 +767,280 @@ def _get_advanced_stt_configs() -> list[ModelConfig]:
     ]
 
 
+def _get_native_gguf_stt_configs() -> list[ModelConfig]:
+    """Handy-compatible GGUF models backed by the in-process transcribe.cpp runtime.
+
+    This catalog deliberately omits GGUF conversions of checkpoints that are
+    already represented by Diarix's Whisper, Qwen3-ASR, Canary, Parakeet TDT,
+    and Granite entries. The remaining models add genuinely different
+    streaming, language, or size choices without presenting duplicate names
+    that download the same base model twice.
+    """
+
+    return [
+        _stt_model_config(
+            model_name="parakeet-unified-en-0.6b-gguf",
+            display_name="Parakeet Unified EN 0.6B",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/parakeet-unified-en-0.6b-gguf",
+            model_size="parakeet-unified-en-0.6b-gguf",
+            size_mb=698,
+            languages=["en"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["streaming", "token_timestamps", "long_audio"],
+            description="Fast, accurate live English transcription through the native GGUF runtime.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            recommended=True,
+            min_vram_gb=2,
+            artifact_filename="parakeet-unified-en-0.6b-Q8_0.gguf",
+            base_model_id="nvidia/parakeet-unified-en-0.6b",
+            source_license="cc-by-4.0",
+        ),
+        _stt_model_config(
+            model_name="nemotron-3.5-asr-streaming-0.6b-gguf",
+            display_name="Nemotron Streaming 3.5",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/nemotron-3.5-asr-streaming-0.6b-gguf",
+            model_size="nemotron-3.5-asr-streaming-0.6b-gguf",
+            size_mb=716,
+            languages=[
+                "en", "es", "fr", "it", "pt", "nl", "de", "tr", "ru", "ar",
+                "hi", "ja", "ko", "vi", "uk", "pl", "sv", "cs", "nb", "da",
+                "bg", "fi", "hr", "sk", "zh", "hu", "ro", "et",
+            ],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=[
+                "language_detection", "streaming", "token_timestamps",
+                "long_audio", "multilingual",
+            ],
+            description="Live multilingual transcription across 28 languages.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            recommended=True,
+            min_vram_gb=2,
+            artifact_filename="nemotron-3.5-asr-streaming-0.6b-Q8_0.gguf",
+            base_model_id="nvidia/nemotron-3.5-asr-streaming-0.6b",
+            source_license="other",
+        ),
+        _stt_model_config(
+            model_name="moonshine-streaming-tiny-gguf",
+            display_name="Moonshine Streaming Tiny",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/moonshine-streaming-tiny-gguf",
+            model_size="moonshine-streaming-tiny-gguf",
+            size_mb=49,
+            languages=["en"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["streaming", "long_audio"],
+            description="Ultra-light English live dictation model with true incremental text.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            min_vram_gb=1,
+            artifact_filename="moonshine-streaming-tiny-Q8_0.gguf",
+            base_model_id="UsefulSensors/moonshine-streaming-tiny",
+            source_license="mit",
+        ),
+        _stt_model_config(
+            model_name="moonshine-streaming-small-gguf",
+            display_name="Moonshine Streaming Small",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/moonshine-streaming-small-gguf",
+            model_size="moonshine-streaming-small-gguf",
+            size_mb=190,
+            languages=["en"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["streaming", "long_audio"],
+            description="Balanced English live dictation model with true incremental text.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            min_vram_gb=1,
+            artifact_filename="moonshine-streaming-small-Q8_0.gguf",
+            base_model_id="UsefulSensors/moonshine-streaming-small",
+            source_license="mit",
+        ),
+        _stt_model_config(
+            model_name="moonshine-streaming-medium-gguf",
+            display_name="Moonshine Streaming Medium",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/moonshine-streaming-medium-gguf",
+            model_size="moonshine-streaming-medium-gguf",
+            size_mb=283,
+            languages=["en"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["streaming", "long_audio"],
+            description="Higher-quality English live dictation with true incremental text.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            min_vram_gb=1,
+            artifact_filename="moonshine-streaming-medium-Q8_0.gguf",
+            base_model_id="UsefulSensors/moonshine-streaming-medium",
+            source_license="mit",
+        ),
+        _stt_model_config(
+            model_name="sensevoice-small-gguf",
+            display_name="SenseVoice Small",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/SenseVoiceSmall-gguf",
+            model_size="sensevoice-small-gguf",
+            size_mb=241,
+            languages=["zh", "yue", "en", "ja", "ko"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["language_detection", "long_audio", "multilingual"],
+            description="Compact five-language recognition with automatic language detection.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            min_vram_gb=1,
+            artifact_filename="SenseVoiceSmall-Q8_0.gguf",
+            base_model_id="FunAudioLLM/SenseVoiceSmall",
+            source_license="other",
+        ),
+        _stt_model_config(
+            model_name="funasr-nano-multilingual-gguf",
+            display_name="Fun-ASR Nano Multilingual",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/Fun-ASR-MLT-Nano-2512-gguf",
+            model_size="funasr-nano-multilingual-gguf",
+            size_mb=850,
+            languages=[
+                "zh", "en", "yue", "ja", "ko", "vi", "id", "th", "ms", "tl",
+                "ar", "hi", "bg", "hr", "cs", "da", "nl", "et", "fi", "el",
+                "hu", "ga", "lv", "lt", "mt", "pl", "pt", "ro", "sk", "sl",
+                "sv",
+            ],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["long_audio", "multilingual"],
+            description="Compact multilingual recognition across 31 languages.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            min_vram_gb=3,
+            artifact_filename="Fun-ASR-MLT-Nano-2512-Q8_0.gguf",
+            base_model_id="FunAudioLLM/Fun-ASR-MLT-Nano-2512",
+            source_license="other",
+        ),
+        _stt_model_config(
+            model_name="gigaam-v3-rnnt-gguf",
+            display_name="GigaAM v3 RNN-T",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/gigaam-v3-rnnt-gguf",
+            model_size="gigaam-v3-rnnt-gguf",
+            size_mb=261,
+            languages=["ru"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["token_timestamps", "long_audio"],
+            description="Compact Russian speech recognition with token timestamps.",
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            min_vram_gb=1,
+            artifact_filename="gigaam-v3-rnnt-Q8_0.gguf",
+            base_model_id="ai-sage/GigaAM-v3",
+            source_license="mit",
+        ),
+        _stt_model_config(
+            model_name="cohere-transcribe-gguf",
+            display_name="Cohere Transcribe",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/cohere-transcribe-03-2026-gguf",
+            model_size="cohere-transcribe-gguf",
+            size_mb=1689,
+            languages=["en", "fr", "de", "es", "it", "pt", "nl", "pl", "el", "ar", "ja", "zh", "vi", "ko"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["long_audio", "multilingual"],
+            description="High-accuracy local transcription across 14 languages.",
+            precision_options=["Q5_K_M"],
+            default_precision="Q5_K_M",
+            recommended=True,
+            min_vram_gb=5,
+            artifact_filename="cohere-transcribe-03-2026-Q5_K_M.gguf",
+            base_model_id="CohereLabs/cohere-transcribe-03-2026",
+            source_license="apache-2.0",
+        ),
+        _stt_model_config(
+            model_name="voxtral-mini-4b-realtime-gguf",
+            display_name="Voxtral Mini 4B Realtime",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/Voxtral-Mini-4B-Realtime-2602-gguf",
+            model_size="voxtral-mini-4b-realtime-gguf",
+            size_mb=3129,
+            languages=[
+                "en", "fr", "es", "de", "ru", "zh", "ja",
+                "it", "pt", "nl", "ar", "hi", "ko",
+            ],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=[
+                "language_detection", "streaming", "long_audio", "multilingual",
+            ],
+            description=(
+                "Low-latency multilingual live transcription across 13 languages "
+                "through the native GGUF runtime."
+            ),
+            precision_options=["Q5_K_M"],
+            default_precision="Q5_K_M",
+            min_vram_gb=6,
+            artifact_filename="Voxtral-Mini-4B-Realtime-2602-Q5_K_M.gguf",
+            base_model_id="mistralai/Voxtral-Mini-4B-Realtime-2602",
+            source_license="apache-2.0",
+        ),
+        _stt_model_config(
+            model_name="breeze-asr-25-gguf",
+            display_name="Breeze ASR 25",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/Breeze-ASR-25-gguf",
+            model_size="breeze-asr-25-gguf",
+            size_mb=1107,
+            languages=["zh", "en"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=[
+                "language_detection", "translation", "segment_timestamps",
+                "long_audio", "multilingual",
+            ],
+            description=(
+                "Taiwanese Mandarin and English transcription tuned for "
+                "code-switching and subtitle timing."
+            ),
+            precision_options=["Q5_K_M"],
+            default_precision="Q5_K_M",
+            min_vram_gb=3,
+            artifact_filename="Breeze-ASR-25-Q5_K_M.gguf",
+            base_model_id="MediaTek-Research/Breeze-ASR-25",
+            source_license="apache-2.0",
+        ),
+        _stt_model_config(
+            model_name="medasr-gguf",
+            display_name="MedASR",
+            engine="transcribe_cpp",
+            hf_repo_id="handy-computer/medasr-gguf",
+            model_size="medasr-gguf",
+            size_mb=122,
+            languages=["en"],
+            modality="stt",
+            runtime_group="native-asr",
+            capabilities=["token_timestamps", "long_audio"],
+            description=(
+                "Compact English medical-dictation recognition. Separate "
+                "Health AI Developer Foundations terms apply; review them before use."
+            ),
+            precision_options=["Q8_0"],
+            default_precision="Q8_0",
+            min_vram_gb=1,
+            artifact_filename="medasr-Q8_0.gguf",
+            base_model_id="google/medasr",
+            source_license="health-ai-developer-foundations",
+        ),
+    ]
+
+
 def _get_qwen_llm_configs() -> list[ModelConfig]:
     """Return Qwen3 LLM configs with backend-aware HF repo IDs.
 
@@ -826,6 +1103,7 @@ def get_all_model_configs() -> list[ModelConfig]:
         + _get_non_qwen_tts_configs()
         + _get_whisper_configs()
         + _get_advanced_stt_configs()
+        + _get_native_gguf_stt_configs()
         + _get_qwen_llm_configs()
     )
 
@@ -842,7 +1120,7 @@ def get_llm_model_configs() -> list[ModelConfig]:
 
 def get_stt_model_configs() -> list[ModelConfig]:
     """Return every native and optional speech-to-text model."""
-    return _get_whisper_configs() + _get_advanced_stt_configs()
+    return _get_whisper_configs() + _get_advanced_stt_configs() + _get_native_gguf_stt_configs()
 
 
 # Lookup helpers — these replace the if/elif chains in main.py
@@ -854,6 +1132,24 @@ def get_model_config(model_name: str) -> Optional[ModelConfig]:
         if cfg.model_name == model_name:
             return cfg
     return None
+
+
+def is_model_config_cached(config: ModelConfig) -> bool:
+    """Check the exact cache artifact required by a catalog entry."""
+    from .base import is_model_cached
+
+    required_files = [config.artifact_filename] if config.artifact_filename else None
+    weight_extensions = (".gguf",) if config.artifact_filename else (".safetensors", ".bin", ".nemo")
+    try:
+        return is_model_cached(
+            config.hf_repo_id,
+            weight_extensions=weight_extensions,
+            required_files=required_files,
+        )
+    except TypeError:
+        # Compatibility with older adapters and lightweight test doubles that
+        # expose the original one-argument cache predicate.
+        return is_model_cached(config.hf_repo_id)
 
 
 def engine_needs_trim(engine: str) -> bool:
@@ -994,15 +1290,29 @@ def get_model_load_func(config: ModelConfig):
     async def download_model_weights() -> None:
         import asyncio
 
-        from huggingface_hub import snapshot_download
+        import huggingface_hub
 
         from .base import (
-            is_model_cached,
             materialize_windows_snapshot_links,
             model_load_progress,
         )
 
         def download() -> None:
+            cached = is_model_config_cached(config)
+            if config.artifact_filename:
+                with model_load_progress(config.model_name, cached):
+                    from pathlib import Path
+
+                    artifact_path = Path(
+                        huggingface_hub.hf_hub_download(
+                            repo_id=config.hf_repo_id,
+                            filename=config.artifact_filename,
+                            local_files_only=False,
+                        )
+                    )
+                    materialize_windows_snapshot_links(artifact_path.parent)
+                return
+
             download_options = {"repo_id": config.hf_repo_id}
             if config.model_name == "nvidia-parakeet-tdt-0.6b-v3":
                 # Diarix runs Parakeet through NVIDIA's supported NeMo path.
@@ -1017,9 +1327,9 @@ def get_model_load_func(config: ModelConfig):
 
             with model_load_progress(
                 config.model_name,
-                is_model_cached(config.hf_repo_id),
+                cached,
             ):
-                snapshot_path = snapshot_download(**download_options)
+                snapshot_path = huggingface_hub.snapshot_download(**download_options)
                 if config.engine == "faster_whisper":
                     materialize_windows_snapshot_links(snapshot_path)
 
@@ -1145,6 +1455,9 @@ def get_stt_backend_for_engine(engine: str) -> STTBackend:
         elif engine == "qwen_asr":
             from .stt.qwen_backend import QwenASRBackend
             backend = QwenASRBackend()
+        elif engine == "transcribe_cpp":
+            from .stt.transcribe_cpp_backend import TranscribeCppSTTBackend
+            backend = TranscribeCppSTTBackend()
         else:
             raise ValueError(f"Unknown STT engine: {engine}")
 

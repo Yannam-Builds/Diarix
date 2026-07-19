@@ -1,6 +1,6 @@
 import { Check, ChevronDown, FolderOpen, Info, Keyboard, Laptop, Lock, Volume2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccessibilityNotice } from '@/components/AccessibilityGate/AccessibilityGate';
 import { InputMonitoringNotice } from '@/components/InputMonitoringGate/InputMonitoringGate';
@@ -34,6 +34,11 @@ import { usePlatform } from '@/platform/PlatformContext';
 import { useServerStore } from '@/stores/serverStore';
 import { cn } from '@/lib/utils/cn';
 import { defaultChordKeys, displayLabelForKey, modifierSideHint } from '@/lib/utils/keyCodes';
+import {
+  modelRuntimeLabel,
+  normalizedSttLanguage,
+  sttLanguageOptions,
+} from '@/lib/utils/sttModels';
 import type { Qwen3ModelSize, VoiceProfileResponse } from '@/lib/api/types';
 import { SettingRow, SettingSection } from './SettingRow';
 
@@ -138,11 +143,16 @@ export function CapturesPage() {
   });
   const transcriptionModels = modelStatus?.models.filter((model) => model.modality === 'stt') ?? [];
   const sttModel = settings?.stt_model ?? 'whisper-turbo';
-  const selectedSttModel =
+  const selectedSttModelConfig =
     transcriptionModels.find(
       (model) => model.model_name === sttModel || model.model_size === sttModel,
-    )?.model_name ?? sttModel;
+    );
+  const selectedSttModel = selectedSttModelConfig?.model_name ?? sttModel;
   const language = settings?.language ?? 'auto';
+  const languageOptions = useMemo(
+    () => sttLanguageOptions(selectedSttModelConfig),
+    [selectedSttModelConfig],
+  );
   const autoRefine = settings?.auto_refine ?? true;
   const llmModel = settings?.llm_model ?? '0.6B';
   const smartCleanup = settings?.smart_cleanup ?? true;
@@ -367,7 +377,13 @@ export function CapturesPage() {
           action={
             <Select
               value={selectedSttModel}
-              onValueChange={(v) => update({ stt_model: v })}
+              onValueChange={(v) => {
+                const nextModel = transcriptionModels.find((model) => model.model_name === v);
+                update({
+                  stt_model: v,
+                  language: normalizedSttLanguage(nextModel, language),
+                });
+              }}
             >
               <SelectTrigger className="w-[300px]">
                 <SelectValue />
@@ -376,7 +392,9 @@ export function CapturesPage() {
                 {transcriptionModels.map((model) => (
                   <SelectItem key={model.model_name} value={model.model_name}>
                     {model.display_name}
-                    {model.runtime_group !== 'core' ? ' · Advanced' : ''}
+                    {modelRuntimeLabel(model.runtime_group)
+                      ? ` · ${modelRuntimeLabel(model.runtime_group)}`
+                      : ''}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -393,14 +411,11 @@ export function CapturesPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">{t('settings.captures.transcription.language.auto')}</SelectItem>
-                <SelectItem value="en">{t('settings.captures.transcription.language.en')}</SelectItem>
-                <SelectItem value="es">{t('settings.captures.transcription.language.es')}</SelectItem>
-                <SelectItem value="fr">{t('settings.captures.transcription.language.fr')}</SelectItem>
-                <SelectItem value="de">{t('settings.captures.transcription.language.de')}</SelectItem>
-                <SelectItem value="ja">{t('settings.captures.transcription.language.ja')}</SelectItem>
-                <SelectItem value="zh">{t('settings.captures.transcription.language.zh')}</SelectItem>
-                <SelectItem value="hi">{t('settings.captures.transcription.language.hi')}</SelectItem>
+                {languageOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           }

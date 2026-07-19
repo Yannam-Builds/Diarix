@@ -62,7 +62,7 @@ def materialize_windows_snapshot_links(snapshot_dir: str | Path) -> Path:
 def is_model_cached(
     hf_repo: str,
     *,
-    weight_extensions: tuple[str, ...] = (".safetensors", ".bin", ".nemo"),
+    weight_extensions: tuple[str, ...] = (".safetensors", ".bin", ".nemo", ".gguf"),
     required_files: Optional[list[str]] = None,
 ) -> bool:
     """

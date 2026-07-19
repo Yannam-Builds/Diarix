@@ -40,6 +40,7 @@ _transcription_worker_task: asyncio.Task | None = None
 _queued_transcription_ids: set[str] = set()
 _running_transcription_tasks: dict[str, asyncio.Task] = {}
 _cancelled_transcription_ids: set[str] = set()
+_running_capture_operations: dict[str, asyncio.Task] = {}
 _inference_lock: asyncio.Lock = None  # type: ignore  # initialized at startup
 
 
@@ -258,6 +259,43 @@ def is_transcription_cancel_requested(task_id: str) -> bool:
     return task is not None and task.cancelling() > 0
 
 
+async def run_capture_operation(operation_id: str, coro):
+    """Run a dictation/capture operation through the shared inference lock.
+
+    Capture requests are request/response shaped rather than persistent batch
+    jobs, but they must still serialize with TTS and dashboard transcription
+    work. Registering the task here also gives the Tauri tray one real
+    cancellation target instead of merely hiding the dictate overlay.
+    """
+    if not operation_id:
+        raise ValueError("Capture operation ID is required")
+    if operation_id in _running_capture_operations:
+        coro.close()
+        raise ValueError(f"Capture operation '{operation_id}' is already running")
+
+    task = asyncio.create_task(_run_with_inference_lock(coro))
+    _running_capture_operations[operation_id] = task
+    try:
+        return await task
+    finally:
+        _running_capture_operations.pop(operation_id, None)
+
+
+def cancel_capture_operation(operation_id: str) -> bool:
+    """Cancel a capture, dictation transcription, or refinement operation."""
+    task = _running_capture_operations.get(operation_id)
+    if task is None:
+        return False
+    task.cancel()
+    return True
+
+
+def is_capture_cancel_requested(operation_id: str) -> bool:
+    """Whether a capture adapter should stop at its next safe chunk boundary."""
+    task = _running_capture_operations.get(operation_id)
+    return task is not None and task.cancelling() > 0
+
+
 def init_queue(force: bool = False):
     """Initialize the generation queue and start the worker.
 
@@ -267,6 +305,7 @@ def init_queue(force: bool = False):
     global _queued_generation_ids, _running_generation_tasks, _cancelled_generation_ids
     global _transcription_queue, _transcription_worker_task
     global _queued_transcription_ids, _running_transcription_tasks, _cancelled_transcription_ids
+    global _running_capture_operations
     global _inference_lock
 
     if _generation_worker_task is not None and not _generation_worker_task.done():
@@ -291,6 +330,9 @@ def init_queue(force: bool = False):
     _queued_transcription_ids = set()
     _running_transcription_tasks = {}
     _cancelled_transcription_ids = set()
+    for task in list(_running_capture_operations.values()):
+        task.cancel()
+    _running_capture_operations = {}
     _inference_lock = asyncio.Lock()
     _generation_worker_task = create_background_task(_generation_worker())
     _transcription_worker_task = create_background_task(_transcription_worker())

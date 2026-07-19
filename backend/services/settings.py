@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from ..backends import resolve_stt_config
 from ..database import (
     CaptureSettings as DBCaptureSettings,
     GenerationSettings as DBGenerationSettings,
@@ -78,7 +79,27 @@ def _apply_patch(row: Any, patch: dict[str, Any]) -> None:
 
 def get_capture_settings(db: Session) -> DBCaptureSettings:
     """Return the capture settings row, creating it with defaults if missing."""
-    return _get_or_create_capture_row(db)
+    row = _get_or_create_capture_row(db)
+    from .transcribe import default_stt_language, resolve_stt_language
+
+    changed = False
+    try:
+        model_config = resolve_stt_config(row.stt_model)
+    except ValueError:
+        model_config = resolve_stt_config("whisper-turbo")
+        row.stt_model = model_config.model_name
+        changed = True
+    try:
+        normalized_language = resolve_stt_language(model_config, row.language)
+    except ValueError:
+        normalized_language = default_stt_language(model_config)
+    if row.language != normalized_language:
+        row.language = normalized_language
+        changed = True
+    if changed:
+        db.commit()
+        db.refresh(row)
+    return row
 
 
 def update_capture_settings(db: Session, patch: dict[str, Any]) -> DBCaptureSettings:
@@ -89,6 +110,19 @@ def update_capture_settings(db: Session, patch: dict[str, Any]) -> DBCaptureSett
             patch["model_unload_timeout_seconds"]
         )
     row = _get_or_create_capture_row(db)
+    from .transcribe import default_stt_language, resolve_stt_language
+
+    model_config = resolve_stt_config(patch.get("stt_model", row.stt_model))
+    candidate_language = patch.get("language", row.language)
+    try:
+        normalized_language = resolve_stt_language(model_config, candidate_language)
+    except ValueError:
+        if "language" in patch:
+            raise
+        normalized_language = default_stt_language(model_config)
+    if "stt_model" in patch:
+        patch["stt_model"] = model_config.model_name
+    patch["language"] = normalized_language
     _apply_patch(row, patch)
     db.commit()
     db.refresh(row)

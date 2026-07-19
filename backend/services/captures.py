@@ -7,13 +7,17 @@ uploaded file). Storage mirrors the generations flow: audio lives under
 ``data/captures/<id>.wav`` and rows live in the ``captures`` table.
 """
 
+import asyncio
 import json
 import logging
 import shutil
 import uuid
+import wave
+from collections.abc import Callable
 from pathlib import Path
 from typing import Optional
 
+import numpy as np
 from sqlalchemy.orm import Session
 
 from .. import config
@@ -61,6 +65,7 @@ async def create_capture(
     language: Optional[str],
     stt_model: Optional[str],
     db: Session,
+    should_stop: Callable[[], bool] | None = None,
 ) -> CaptureResponse:
     """Persist raw audio, run STT, store the row."""
     if source not in VALID_SOURCES:
@@ -76,19 +81,26 @@ async def create_capture(
         written_files.append(raw_path)
 
         model_config = resolve_stt_config(stt_model)
+        resolved_language = transcribe.resolve_stt_language(model_config, language)
+        inference_language = None if resolved_language == "auto" else resolved_language
         async with ingest_media(raw_path, model_config.audio_input) as media:
             duration_ms = (
                 max(0, round(media.duration * 1000)) if media.duration is not None else None
             )
             transcript, resolved_stt = await transcribe.transcribe_audio(
-                str(media.audio_path), model_config.model_name, language
+                str(media.audio_path),
+                model_config.model_name,
+                inference_language,
+                should_stop=should_stop,
             )
+        if should_stop is not None and should_stop():
+            raise asyncio.CancelledError
 
         row = DBCapture(
             id=capture_id,
             audio_path=config.to_storage_path(raw_path),
             source=source,
-            language=language,
+            language=inference_language,
             duration_ms=duration_ms,
             transcript_raw=transcript,
             stt_model=resolved_stt,
@@ -96,7 +108,7 @@ async def create_capture(
         db.add(row)
         db.commit()
         db.refresh(row)
-    except Exception:
+    except (Exception, asyncio.CancelledError):
         # Anything between the first write and the commit means the audio on
         # disk has no row pointing at it — clean up so data/captures doesn't
         # accumulate orphan blobs across failed transcribes.
@@ -196,17 +208,18 @@ async def retranscribe_capture(
         raise FileNotFoundError(f"Audio for capture {capture_id} is missing")
 
     model_config = resolve_stt_config(stt_model or row.stt_model)
+    resolved_language = transcribe.resolve_stt_language(model_config, language)
+    inference_language = None if resolved_language == "auto" else resolved_language
     async with ingest_media(resolved, model_config.audio_input) as media:
         transcript, resolved_stt = await transcribe.transcribe_audio(
-            str(media.audio_path), model_config.model_name, language
+            str(media.audio_path), model_config.model_name, inference_language
         )
         if media.duration is not None:
             row.duration_ms = max(0, round(media.duration * 1000))
 
     row.transcript_raw = transcript
     row.stt_model = resolved_stt
-    if language:
-        row.language = language
+    row.language = inference_language
     # Refined text is stale after a fresh STT pass — force a re-refine.
     row.transcript_refined = None
     row.llm_model = None
@@ -258,3 +271,47 @@ def persist_completed_transcription(
         raise
     finally:
         db.close()
+
+
+def persist_live_capture(
+    *,
+    pcm: np.ndarray,
+    language: Optional[str],
+    transcript: str,
+    stt_model: str,
+    db: Session,
+) -> CaptureResponse:
+    """Persist one microphone-time stream without transcribing it twice."""
+    samples = np.asarray(pcm, dtype=np.float32).reshape(-1)
+    if samples.size == 0:
+        raise ValueError("Live capture did not contain any audio")
+
+    capture_id = str(uuid.uuid4())
+    retained_path = config.get_captures_dir() / f"{capture_id}__dictation.wav"
+    pcm16 = np.clip(samples, -1.0, 1.0)
+    pcm16 = (pcm16 * 32767.0).astype("<i2")
+
+    try:
+        with wave.open(str(retained_path), "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(2)
+            output.setframerate(16_000)
+            output.writeframes(pcm16.tobytes())
+
+        row = DBCapture(
+            id=capture_id,
+            audio_path=config.to_storage_path(retained_path),
+            source="dictation",
+            language=language,
+            duration_ms=max(0, round(samples.size / 16_000 * 1000)),
+            transcript_raw=transcript.strip(),
+            stt_model=stt_model,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return _to_response(row)
+    except Exception:
+        db.rollback()
+        retained_path.unlink(missing_ok=True)
+        raise

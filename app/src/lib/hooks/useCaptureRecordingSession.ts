@@ -4,11 +4,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PillState } from '@/components/CapturePill/CapturePill';
 import { apiClient } from '@/lib/api/client';
 import type {
+  CaptureCreateResponse,
   CaptureListResponse,
   CaptureResponse,
   CaptureSource,
 } from '@/lib/api/types';
 import { useAudioRecording } from '@/lib/hooks/useAudioRecording';
+import { LiveCaptureTransport } from '@/lib/liveCapture';
 
 /**
  * Broadcast to sibling Tauri webviews that the captures list has changed.
@@ -51,6 +53,13 @@ const BRIEF_NOTICE_MS = 2000;
 const MIN_RECORDING_DURATION_S = 0.5;
 const SHORT_RECORDING_MESSAGE = 'Recording too short, canceled';
 
+function createOperationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `capture-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 export type CapturePillState = PillState | 'hidden';
 
 export interface UseCaptureRecordingSessionOptions {
@@ -82,12 +91,30 @@ export interface UseCaptureRecordingSessionResult {
   isRecording: boolean;
   isUploading: boolean;
   isRefining: boolean;
+  liveTranscript: string;
   startRecording: () => void;
   stopRecording: () => void;
+  cancelCurrent: () => void;
   toggleRecording: () => void;
   dismissError: () => void;
   uploadFile: (file: File, source: CaptureSource) => void;
   refine: (captureId: string) => void;
+}
+
+type LiveCaptureStatus =
+  | 'connecting'
+  | 'active'
+  | 'fallback'
+  | 'succeeded'
+  | 'cancelled';
+
+interface PendingLiveCapture {
+  operationId: string;
+  transport: LiveCaptureTransport | null;
+  status: LiveCaptureStatus;
+  fallbackFile: File | null;
+  fallbackStarted: boolean;
+  recordingComplete: boolean;
 }
 
 /**
@@ -110,8 +137,12 @@ export function useCaptureRecordingSession(
   const [pillState, setPillState] = useState<CapturePillState>('hidden');
   const [frozenElapsedMs, setFrozenElapsedMs] = useState(0);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [liveTranscript, setLiveTranscript] = useState('');
   const restTimerRef = useRef<number | null>(null);
   const errorTimerRef = useRef<number | null>(null);
+  const activeOperationIdRef = useRef<string | null>(null);
+  const cancelledOperationIdsRef = useRef(new Set<string>());
+  const pendingLiveCaptureRef = useRef<PendingLiveCapture | null>(null);
 
   // Mutation callbacks close over stale pillState otherwise.
   const pillStateRef = useRef<CapturePillState>('hidden');
@@ -187,8 +218,23 @@ export function useCaptureRecordingSession(
 
   const refineMutation = useMutation({
     // Empty body — backend resolves flags and model from capture_settings.
-    mutationFn: async (captureId: string) => apiClient.refineCapture(captureId, {}),
-    onSuccess: (data, captureId) => {
+    mutationFn: async ({
+      captureId,
+      operationId,
+    }: {
+      captureId: string;
+      operationId: string;
+    }) => apiClient.refineCapture(captureId, {}, operationId),
+    onSuccess: (data, { captureId, operationId }) => {
+      if (cancelledOperationIdsRef.current.delete(operationId)) {
+        if (activeOperationIdRef.current === operationId) {
+          activeOperationIdRef.current = null;
+        }
+        return;
+      }
+      if (activeOperationIdRef.current === operationId) {
+        activeOperationIdRef.current = null;
+      }
       queryClient.invalidateQueries({ queryKey: ['captures'] });
       broadcastUpdated(captureId);
       if (pillStateRef.current === 'refining') scheduleHidePill();
@@ -197,39 +243,94 @@ export function useCaptureRecordingSession(
         onFinalTextRef.current?.(finalText, data, allowAutoPasteRef.current);
       }
     },
-    onError: (err: Error) => {
+    onError: (err: Error, { operationId }) => {
+      if (cancelledOperationIdsRef.current.delete(operationId)) {
+        if (activeOperationIdRef.current === operationId) {
+          activeOperationIdRef.current = null;
+        }
+        return;
+      }
+      if (activeOperationIdRef.current === operationId) {
+        activeOperationIdRef.current = null;
+      }
       showError(err.message || 'Refinement failed');
     },
   });
 
-  const uploadMutation = useMutation({
-    mutationFn: async ({ file, source }: { file: File; source: CaptureSource }) =>
-      apiClient.createCapture(file, { source }),
-    onSuccess: (capture) => {
-      queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) => {
-        if (!prev) return prev;
-        if (prev.items.some((c) => c.id === capture.id)) return prev;
-        return { ...prev, items: [capture, ...prev.items], total: prev.total + 1 };
-      });
-      queryClient.invalidateQueries({ queryKey: ['captures'] });
-      broadcastCreated(capture);
-      onCaptureCreatedRef.current?.(capture);
-      allowAutoPasteRef.current = capture.allow_auto_paste;
-      if (capture.auto_refine) {
-        setPillState('refining');
-        refineMutation.mutate(capture.id);
-      } else {
-        if (pillStateRef.current === 'transcribing') scheduleHidePill();
-        if (capture.transcript_raw) {
-          onFinalTextRef.current?.(
-            capture.transcript_raw,
-            capture,
-            capture.allow_auto_paste,
-          );
-        }
+  function handleCaptureSuccess(
+    capture: CaptureCreateResponse,
+    operationId: string,
+  ) {
+    if (cancelledOperationIdsRef.current.delete(operationId)) {
+      if (activeOperationIdRef.current === operationId) {
+        activeOperationIdRef.current = null;
       }
+      return;
+    }
+    queryClient.setQueryData<CaptureListResponse>(['captures'], (prev) => {
+      if (!prev) return prev;
+      if (prev.items.some((item) => item.id === capture.id)) return prev;
+      return { ...prev, items: [capture, ...prev.items], total: prev.total + 1 };
+    });
+    queryClient.invalidateQueries({ queryKey: ['captures'] });
+    broadcastCreated(capture);
+    onCaptureCreatedRef.current?.(capture);
+    allowAutoPasteRef.current = capture.allow_auto_paste;
+    if (capture.auto_refine) {
+      const refineOperationId = createOperationId();
+      activeOperationIdRef.current = refineOperationId;
+      setPillState('refining');
+      refineMutation.mutate({
+        captureId: capture.id,
+        operationId: refineOperationId,
+      });
+    } else {
+      if (activeOperationIdRef.current === operationId) {
+        activeOperationIdRef.current = null;
+      }
+      if (pillStateRef.current === 'transcribing') scheduleHidePill();
+      if (capture.transcript_raw) {
+        onFinalTextRef.current?.(
+          capture.transcript_raw,
+          capture,
+          capture.allow_auto_paste,
+        );
+      }
+    }
+  }
+
+  const uploadMutation = useMutation({
+    mutationFn: async ({
+      file,
+      source,
+      operationId,
+    }: {
+      file: File;
+      source: CaptureSource;
+      operationId: string;
+    }) => apiClient.createCapture(file, { source, operationId }),
+    onSuccess: (capture, { operationId }) => {
+      const pending = pendingLiveCaptureRef.current;
+      if (pending?.operationId === operationId) {
+        pendingLiveCaptureRef.current = null;
+      }
+      handleCaptureSuccess(capture, operationId);
     },
-    onError: (err: Error) => {
+    onError: (err: Error, { operationId }) => {
+      const pending = pendingLiveCaptureRef.current;
+      if (pending?.operationId === operationId) {
+        pendingLiveCaptureRef.current = null;
+      }
+      if (cancelledOperationIdsRef.current.delete(operationId)) {
+        if (activeOperationIdRef.current === operationId) {
+          activeOperationIdRef.current = null;
+        }
+        return;
+      }
+      setLiveTranscript('');
+      if (activeOperationIdRef.current === operationId) {
+        activeOperationIdRef.current = null;
+      }
       // Backend's librosa-audioread fallback returns a 400 with this shape
       // for tiny/corrupt webm blobs that slip past the client guard —
       // translate it to the same friendly message so the user sees one
@@ -243,11 +344,28 @@ export function useCaptureRecordingSession(
     },
   });
 
+  function startFallbackUpload(pending: PendingLiveCapture) {
+    if (
+      pending.fallbackStarted ||
+      pending.status !== 'fallback' ||
+      !pending.fallbackFile
+    ) {
+      return;
+    }
+    pending.fallbackStarted = true;
+    uploadMutation.mutate({
+      file: pending.fallbackFile,
+      source: 'dictation',
+      operationId: pending.operationId,
+    });
+  }
+
   const {
     isRecording,
     duration,
     startRecording: beginAudioRecording,
     stopRecording,
+    cancelRecording,
     error: recordError,
   } = useAudioRecording({
     onRecordingComplete: (blob, recordedDuration) => {
@@ -255,6 +373,17 @@ export function useCaptureRecordingSession(
       // so the blob is empty or unparseable. Surface it as a transient pill
       // so the user sees their recording was recognised and canceled.
       if (!blob.size || (recordedDuration ?? 0) < MIN_RECORDING_DURATION_S) {
+        const pending = pendingLiveCaptureRef.current;
+        if (pending) {
+          pending.status = 'cancelled';
+          pending.transport?.cancel();
+          pendingLiveCaptureRef.current = null;
+          if (activeOperationIdRef.current === pending.operationId) {
+            activeOperationIdRef.current = null;
+          }
+          void apiClient.cancelCaptureOperation(pending.operationId).catch(() => {});
+        }
+        setLiveTranscript('');
         showError(SHORT_RECORDING_MESSAGE, BRIEF_NOTICE_MS);
         return;
       }
@@ -268,21 +397,113 @@ export function useCaptureRecordingSession(
       const file = new File([blob], `dictation-${Date.now()}.${extension}`, {
         type: blob.type,
       });
-      uploadMutation.mutate({ file, source: 'dictation' });
+      const pending = pendingLiveCaptureRef.current;
+      if (pending) {
+        pending.recordingComplete = true;
+        pending.fallbackFile = file;
+        if (pending.status === 'fallback') {
+          startFallbackUpload(pending);
+        } else if (
+          pending.status === 'succeeded' ||
+          pending.status === 'cancelled'
+        ) {
+          pendingLiveCaptureRef.current = null;
+        }
+        return;
+      }
+
+      const operationId = createOperationId();
+      activeOperationIdRef.current = operationId;
+      uploadMutation.mutate({ file, source: 'dictation', operationId });
+    },
+    onPcmChunk: (pcm, sampleRate) => {
+      pendingLiveCaptureRef.current?.transport?.push(pcm, sampleRate);
+    },
+    onPcmEnd: () => {
+      pendingLiveCaptureRef.current?.transport?.stop();
     },
   });
 
   useEffect(() => {
     if (recordError) {
+      const pending = pendingLiveCaptureRef.current;
+      if (pending) {
+        pending.status = 'cancelled';
+        pending.transport?.cancel();
+        pendingLiveCaptureRef.current = null;
+        if (activeOperationIdRef.current === pending.operationId) {
+          activeOperationIdRef.current = null;
+        }
+      }
       showError(recordError);
     }
   }, [recordError, showError]);
 
   const startRecording = useCallback(() => {
-    if (isRecording) return;
+    // Handy-style single-session coordinator: a second shortcut press while
+    // transcription/refinement is still active must not replace the captured
+    // focus target or operation id. The tray remains the cancellation surface
+    // until the current pipeline returns to idle.
+    if (
+      activeOperationIdRef.current ||
+      isRecording ||
+      uploadMutation.isPending ||
+      refineMutation.isPending
+    ) {
+      return;
+    }
     clearRestTimer();
     setFrozenElapsedMs(0);
+    setLiveTranscript('');
     setPillState('recording');
+    const operationId = createOperationId();
+    activeOperationIdRef.current = operationId;
+    const pending: PendingLiveCapture = {
+      operationId,
+      transport: null,
+      status: 'connecting',
+      fallbackFile: null,
+      fallbackStarted: false,
+      recordingComplete: false,
+    };
+    pendingLiveCaptureRef.current = pending;
+    try {
+      pending.transport = new LiveCaptureTransport(
+        apiClient.getLiveCaptureWebSocketUrl(),
+        operationId,
+        {
+          onReady: () => {
+            if (pendingLiveCaptureRef.current === pending) {
+              pending.status = 'active';
+            }
+          },
+          onPartial: (text) => {
+            if (pendingLiveCaptureRef.current === pending) {
+              setLiveTranscript(text);
+            }
+          },
+          onFinal: (capture, text) => {
+            if (pendingLiveCaptureRef.current !== pending) return;
+            pending.status = 'succeeded';
+            setLiveTranscript(text);
+            handleCaptureSuccess(capture, operationId);
+            if (pending.recordingComplete) {
+              pendingLiveCaptureRef.current = null;
+            }
+          },
+          onUnavailable: (reason) => {
+            if (pendingLiveCaptureRef.current !== pending) return;
+            console.info('[dictation] using completed-audio fallback:', reason);
+            pending.status = 'fallback';
+            setLiveTranscript('');
+            startFallbackUpload(pending);
+          },
+        },
+      );
+    } catch (error) {
+      console.warn('[dictation] failed to start live transport:', error);
+      pending.status = 'fallback';
+    }
     // Begin loading the selected model while the user speaks. The capture
     // request later shares the same backend lifecycle lock, so it either
     // reuses the warm model or waits for this one load instead of starting a
@@ -291,7 +512,13 @@ export function useCaptureRecordingSession(
       console.warn('[dictation] model warm-up failed:', error);
     });
     beginAudioRecording();
-  }, [isRecording, beginAudioRecording, clearRestTimer]);
+  }, [
+    isRecording,
+    uploadMutation.isPending,
+    refineMutation.isPending,
+    beginAudioRecording,
+    clearRestTimer,
+  ]);
 
   const toggleRecording = useCallback(() => {
     if (isRecording) {
@@ -301,16 +528,44 @@ export function useCaptureRecordingSession(
     startRecording();
   }, [isRecording, startRecording, stopRecording]);
 
+  const cancelCurrent = useCallback(() => {
+    clearRestTimer();
+    clearErrorTimer();
+    const pending = pendingLiveCaptureRef.current;
+    if (pending) {
+      pending.status = 'cancelled';
+      pending.transport?.cancel();
+      pendingLiveCaptureRef.current = null;
+    }
+    cancelRecording();
+    const operationId = activeOperationIdRef.current;
+    activeOperationIdRef.current = null;
+    if (operationId) {
+      cancelledOperationIdsRef.current.add(operationId);
+      void apiClient.cancelCaptureOperation(operationId).catch((error) => {
+        console.warn('[dictation] failed to cancel backend operation:', error);
+      });
+    }
+    setFrozenElapsedMs(0);
+    setLiveTranscript('');
+    setErrorMessage(null);
+    setPillState('hidden');
+  }, [cancelRecording, clearErrorTimer, clearRestTimer]);
+
   const uploadFile = useCallback(
     (file: File, source: CaptureSource) => {
-      uploadMutation.mutate({ file, source });
+      const operationId = createOperationId();
+      activeOperationIdRef.current = operationId;
+      uploadMutation.mutate({ file, source, operationId });
     },
     [uploadMutation],
   );
 
   const refine = useCallback(
     (captureId: string) => {
-      refineMutation.mutate(captureId);
+      const operationId = createOperationId();
+      activeOperationIdRef.current = operationId;
+      refineMutation.mutate({ captureId, operationId });
     },
     [refineMutation],
   );
@@ -325,8 +580,10 @@ export function useCaptureRecordingSession(
     isRecording,
     isUploading: uploadMutation.isPending,
     isRefining: refineMutation.isPending,
+    liveTranscript,
     startRecording,
     stopRecording,
+    cancelCurrent,
     toggleRecording,
     dismissError,
     uploadFile,

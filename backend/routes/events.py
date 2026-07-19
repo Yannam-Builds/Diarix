@@ -12,7 +12,7 @@ import logging
 from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
 
-from ..mcp_server import events as mcp_events
+from ..services import speak_events as speaking_events
 
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ async def speak_events(request: Request):
     """SSE stream of speak-start / speak-end events."""
 
     async def event_stream():
-        queue = mcp_events.subscribe()
+        queue = speaking_events.subscribe()
         try:
             # Immediate hello so EventSource knows the connection is live.
             yield {"event": "ready", "data": "{}"}
@@ -41,6 +41,6 @@ async def speak_events(request: Request):
                 kind = event.pop("kind", "message")
                 yield {"event": kind, "data": json.dumps(event)}
         finally:
-            mcp_events.unsubscribe(queue)
+            speaking_events.unsubscribe(queue)
 
     return EventSourceResponse(event_stream())

@@ -34,9 +34,6 @@ jobs:
           mkdir -p ../tauri/src-tauri/binaries
           cp dist/diarix-server.exe ../tauri/src-tauri/binaries/diarix-server-${PLATFORM}.exe
           echo "Built diarix-server-${PLATFORM}.exe"
-          # MCP shim (voicebox-mcp) intentionally not built: MCP is unwired
-          # from the backend for now (see backend/app.py create_app()).
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
 
@@ -57,8 +54,8 @@ jobs:
         with:
           projectPath: tauri
           tagName: v__VERSION__
-          releaseName: "voicebox v__VERSION__ (test build)"
-          releaseBody: "Test build for audio export fix"
+          releaseName: "Diarix v__VERSION__ alpha"
+          releaseBody: "Automated Windows alpha candidate. See CHANGELOG.md for scope and known limitations."
           releaseDraft: true
           prerelease: true
           args: ""

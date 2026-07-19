@@ -25,12 +25,14 @@ target/
 *.AppImage
 installer/build-logs/
 installer/output/
+artifacts/
 
 # IDE and local agent state
 .vscode/
 .idea/
 .claude/settings.local.json
 .impeccable/
+Studio/
 *.swp
 *.swo
 *~
@@ -64,7 +66,6 @@ tauri/src-tauri/gen/partial.plist
 
 # PyInstaller
 *.spec
-!backend/diarix-server.spec
 
 # Windows artifacts
 nul

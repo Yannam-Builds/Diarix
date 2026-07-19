@@ -77,6 +77,7 @@ export function CapturePill({
   state,
   elapsedMs,
   onStop,
+  liveText,
   errorMessage,
   onDismiss,
   className,
@@ -84,6 +85,7 @@ export function CapturePill({
   state: PillState;
   elapsedMs: number;
   onStop?: () => void;
+  liveText?: string;
   errorMessage?: string | null;
   onDismiss?: () => void;
   className?: string;
@@ -101,6 +103,7 @@ export function CapturePill({
   }
 
   const visible = state !== 'rest';
+  const visibleLiveText = state === 'recording' ? liveText?.trim() : '';
   const labelText = t(state === 'rest' ? PILL_LABEL_KEYS.recording : PILL_LABEL_KEYS[state]);
   const barMode = barModeFor(state);
 
@@ -133,9 +136,11 @@ export function CapturePill({
       : null;
 
   return (
-    <div
+    <motion.div
+      layout
       className={cn(
         'inline-flex items-center gap-3 px-4 h-10 rounded-full text-accent',
+        'max-w-[690px]',
         'bg-white/80 ring-1 ring-black/5 shadow-lg backdrop-blur-xl',
         'dark:bg-black/55 dark:ring-0 dark:shadow-none dark:backdrop-blur-md',
         completedStroke,
@@ -143,16 +148,28 @@ export function CapturePill({
         visible ? 'opacity-100' : 'opacity-0 pointer-events-none',
         className,
       )}
+      transition={{ layout: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
     >
       {stopButton}
       <span className="text-sm font-medium shrink-0" style={{ minWidth: '104px' }}>
         {labelText}
       </span>
       <PillAudioBars mode={barMode} />
+      {visibleLiveText ? (
+        <>
+          <span className="h-4 w-px shrink-0 bg-accent/20" aria-hidden="true" />
+          <span
+            className="min-w-0 max-w-[280px] truncate text-xs font-medium text-foreground/75"
+            title={visibleLiveText}
+          >
+            {visibleLiveText}
+          </span>
+        </>
+      ) : null}
       <span className="text-xs tabular-nums text-accent/70 font-medium shrink-0 -ml-1">
         {formatElapsed(elapsedMs)}
       </span>
-    </div>
+    </motion.div>
   );
 }
 

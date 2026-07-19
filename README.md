@@ -1,14 +1,17 @@
 <p align="center">
-  <img src=".github/assets/diarix-logo-exact.svg" alt="Diarix logo" width="104" />
-</p>
-
-<p align="center">
   <img src=".github/assets/diarix-hero.svg" alt="Diarix — local speech intelligence" width="100%" />
 </p>
 
 <p align="center">
   <strong>Transcription-first. Local-first. One native studio.</strong><br />
   Turn audio, video, and live speech into useful text—then generate voices, refine drafts, and manage every local model without leaving the app.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Yannam-Builds/Diarix/actions/workflows/ci.yml"><img alt="Alpha quality gate" src="https://github.com/Yannam-Builds/Diarix/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-c6a648" /></a>
+  <img alt="Windows 11" src="https://img.shields.io/badge/platform-Windows%2011-4d8edb" />
+  <img alt="Release alpha" src="https://img.shields.io/badge/release-0.1.0--alpha.1-b98a2d" />
 </p>
 
 <p align="center">
@@ -19,7 +22,7 @@
   <a href="#development">Development</a>
 </p>
 
-> Diarix is in active development. The repository is private while runtime verification, packaging, and release hardening are completed.
+> **Alpha status:** Diarix is prerelease software. Windows x64 and the NVIDIA CUDA runtime are the first supported release targets; see [`docs/ALPHA_RELEASE.md`](docs/ALPHA_RELEASE.md) for the ship gate and known limitations.
 
 ## What Diarix does
 
@@ -35,6 +38,10 @@
 - Shared model downloads when multiple runtimes use the same checkpoint
 - Silent bundled servers with no terminal windows in production
 - Local transcripts, audio, profiles, model weights, and generated voices
+
+### Why Diarix
+
+Most local speech tools solve one part of the workflow. Diarix keeps batch transcription, system-wide dictation, model-aware media preparation, voice generation, refinement, history, and runtime management in one native desktop app. It stays useful with a compact CPU runtime and can grow into the CUDA backend without changing the user's library or cache.
 
 ## Model runtime
 
@@ -59,9 +66,9 @@ Every edition uses the same data directory, task API, model catalog, cache, capt
 
 | Edition | Ships with | Can add later |
 |---|---|---|
-| **Diarix** | Native desktop app and lightweight core | whisper.cpp and CUDA/Advanced ASR servers |
-| **Diarix + whisper.cpp** | Desktop app plus compact local transcription | CUDA/Advanced ASR and individual models |
-| **Diarix Full** | Desktop app plus the complete CUDA-capable model server | Any model from the in-app catalog |
+| **Diarix Core** | Native desktop app, compact server, and an empty model cache | Starter models and CUDA/Advanced ASR |
+| **Diarix + Whisper** | Core plus one compact GGUF starter model | CUDA/Advanced ASR and individual models |
+| **Diarix Full CUDA** | Desktop app, compact fallback, and the complete CUDA-capable server | Any model from the in-app catalog |
 
 ## Dictation lifecycle
 
@@ -109,42 +116,22 @@ flowchart LR
 
 The server is bundled and launched silently by Tauri. Diarix does not require a separately managed Python worker.
 
+## Platform roadmap
+
+The first alpha is intentionally Windows 11 x64 so the packaged CPU and NVIDIA CUDA paths can be hardened against one reproducible target. macOS and Linux are planned after the Windows installer, model lifecycle, and transcription correctness gates are stable; they are not yet supported release targets.
+
 ## Development
 
-### Requirements
+Contributor setup lives in [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). The architecture contract is
+documented in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and the exact alpha checklist is in
+[`docs/ALPHA_RELEASE.md`](docs/ALPHA_RELEASE.md).
 
-- Windows 11 for the current CUDA-focused build
-- Bun
-- Rust and Tauri prerequisites
-- Python 3.11 or 3.12 for backend development
-- FFmpeg and FFprobe when running outside the packaged server
+## Acknowledgements and license
 
-### Desktop app
+Diarix is an independent fork of [Voicebox](https://github.com/jamiepine/voicebox), created by Jamie Pine and the Voicebox contributors. Thank you to that project for the studio foundation, local task architecture, and permissive MIT-licensed starting point.
 
-```powershell
-cd tauri
-bun install
-bun run tauri dev
-```
+The lightweight push-to-talk workflow, model warm/unload lifecycle, and practical offline dictation experience were strongly informed by [Handy](https://github.com/cjpais/Handy). Thank you to CJ Pais and the Handy contributors for making that work openly available and raising the bar for local dictation software.
 
-### Backend tests
-
-```powershell
-backend\venv\Scripts\python.exe -m pytest backend\tests -q
-```
-
-Packaging scripts live in [`installer/`](installer/) and [`scripts/`](scripts/). Model weights, application caches, build logs, virtual environments, and packaged binaries are intentionally excluded from source control.
-
-## Current release work
-
-- Complete real-inference verification across ASR, Whisper, TTS, and refinement
-- Compare model output quality on shared fixtures
-- Verify live chunks, progress, cancellation, idle unload, and safe model switching
-- Produce base, whisper.cpp, and full CUDA installers
-- Validate silent startup and backend interchangeability in the real Tauri app
-
-## Upstream and license
-
-Diarix is an independent fork of [Voicebox](https://github.com/jamiepine/voicebox), created by Jamie Pine and the Voicebox contributors. It preserves the upstream MIT license and adds substantial transcription, media-ingestion, runtime, dictation, desktop UX, and packaging work.
+Diarix preserves the upstream MIT license and adds substantial transcription, media-ingestion, runtime, dictation, desktop UX, and packaging work. Project-specific implementations and third-party dependencies retain their respective licenses.
 
 See [`LICENSE`](LICENSE), [`RESPONSIBLE_USE.md`](RESPONSIBLE_USE.md), and [`SECURITY.md`](SECURITY.md).

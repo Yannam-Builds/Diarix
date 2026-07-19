@@ -52,3 +52,39 @@ async def test_cancel_running_generation_cancels_task():
 
     assert task_queue.cancel_generation("gen-running") == "running"
     await asyncio.wait_for(running_cancelled.wait(), timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_cancel_capture_operation_sets_cooperative_stop_and_cleans_registry():
+    task_queue.init_queue(force=True)
+
+    operation_id = "dictation-cancel"
+    started = asyncio.Event()
+    stop_observed = asyncio.Event()
+
+    async def native_inference():
+        started.set()
+        while not task_queue.is_capture_cancel_requested(operation_id):
+            await asyncio.sleep(0)
+        stop_observed.set()
+
+    async def capture_operation():
+        inference = asyncio.create_task(native_inference())
+        try:
+            await asyncio.shield(inference)
+        except asyncio.CancelledError:
+            await inference
+            raise
+
+    running = asyncio.create_task(
+        task_queue.run_capture_operation(operation_id, capture_operation())
+    )
+    await asyncio.wait_for(started.wait(), timeout=1)
+
+    assert task_queue.cancel_capture_operation(operation_id) is True
+    assert task_queue.is_capture_cancel_requested(operation_id) is True
+    await asyncio.wait_for(stop_observed.wait(), timeout=1)
+    with pytest.raises(asyncio.CancelledError):
+        await running
+
+    assert task_queue.cancel_capture_operation(operation_id) is False

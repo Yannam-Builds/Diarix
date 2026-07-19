@@ -154,9 +154,9 @@ async def run_generation(
 def _notify_speak_end(generation_id: str, *, status: str) -> None:
     """Publish a speak-end event; the frontend ignores unknown ids."""
     try:
-        from ..mcp_server import events as mcp_events
+        from . import speak_events
 
-        mcp_events.publish(
+        speak_events.publish(
             "speak-end",
             {"generation_id": generation_id, "status": status},
         )

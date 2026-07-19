@@ -28,7 +28,7 @@ from .. import __version__
 
 logger = logging.getLogger(__name__)
 
-GITHUB_RELEASES_URL = "https://github.com/jamiepine/voicebox/releases/download"
+GITHUB_RELEASES_URL = "https://github.com/Yannam-Builds/Diarix/releases/download"
 
 PROGRESS_KEY = "rocm-backend"
 
@@ -60,8 +60,8 @@ def get_rocm_dir() -> Path:
 def get_rocm_exe_name() -> str:
     """Platform-specific ROCm executable filename."""
     if sys.platform == "win32":
-        return "voicebox-server-rocm.exe"
-    return "voicebox-server-rocm"
+        return "diarix-server-rocm.exe"
+    return "diarix-server-rocm"
 
 
 def get_rocm_binary_path() -> Optional[Path]:
@@ -287,7 +287,7 @@ async def _download_rocm_binary_locked(version: Optional[str] = None):
     # release tag; the libs content version is encoded in the filename only.
     server_base_url = f"{GITHUB_RELEASES_URL}/{version}"
     libs_base_url = server_base_url
-    server_archive = "voicebox-server-rocm.tar.gz"
+    server_archive = "diarix-server-rocm.tar.gz"
     libs_archive = f"rocm-libs-{ROCM_LIBS_VERSION}.tar.gz"
 
     # Always stage when any download is needed, then atomically rename over
@@ -409,9 +409,9 @@ def get_rocm_binary_version() -> Optional[str]:
             timeout=30,
             cwd=str(rocm_path.parent),  # Run from the onedir directory
         )
-        # Output format: "voicebox-server 0.3.0"
+        # Output format: "diarix-server 0.1.0-alpha.1"
         for line in result.stdout.strip().splitlines():
-            if "voicebox-server" in line:
+            if "diarix-server" in line:
                 return line.split()[-1]
     except Exception as e:
         logger.warning(f"Could not get ROCm binary version: {e}")

@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { useEffect } from 'react';
 import { apiClient } from '@/lib/api/client';
 import type {
   CaptureSettings,
@@ -17,6 +19,21 @@ const GENERATION_SETTINGS_KEY = ['settings', 'generation'] as const;
  */
 export function useCaptureSettings() {
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const pending: Promise<UnlistenFn> = listen<{
+      settings?: CaptureSettings;
+    }>('capture:settings-updated', (event) => {
+      const settings = event.payload?.settings;
+      if (settings) {
+        queryClient.setQueryData(CAPTURE_SETTINGS_KEY, settings);
+        queryClient.invalidateQueries({ queryKey: ['capture-readiness'] });
+      }
+    });
+    return () => {
+      pending.then((unlisten) => unlisten()).catch(() => {});
+    };
+  }, [queryClient]);
 
   const query = useQuery({
     queryKey: CAPTURE_SETTINGS_KEY,

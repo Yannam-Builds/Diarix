@@ -15,6 +15,7 @@ RUNTIME_IMPORT_CHECKS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
         ("nemo.collections.speechlm2.models", ("SALM",)),
     ),
     "qwen_asr": (("qwen_asr", ("Qwen3ASRModel",)),),
+    "transcribe_cpp": (("transcribe_cpp", ("Model", "Session", "Stream")),),
     "transformers_asr": (("transformers", ("pipeline",)),),
     "qwen": (("qwen_tts", ("Qwen3TTSModel",)),),
     "qwen_custom_voice": (("qwen_tts", ("Qwen3TTSModel",)),),

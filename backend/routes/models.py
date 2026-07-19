@@ -392,7 +392,7 @@ async def get_model_status():
     except ImportError:
         use_scan_cache = False
 
-    from ..backends import get_all_model_configs, check_model_loaded
+    from ..backends import get_all_model_configs, check_model_loaded, is_model_config_cached
 
     registry_configs = get_all_model_configs()
     shares_map = _shares_cache_with_map(registry_configs)
@@ -419,6 +419,8 @@ async def get_model_status():
             "audio_channels": cfg.audio_input.channels if cfg.audio_input else None,
             "audio_format": cfg.audio_input.container if cfg.audio_input else None,
             "check_loaded": lambda c=cfg: check_model_loaded(c),
+            "check_downloaded": lambda c=cfg: is_model_config_cached(c),
+            "artifact_filename": cfg.artifact_filename,
         }
         for cfg in registry_configs
     ]
@@ -437,11 +439,11 @@ async def get_model_status():
 
     for config in model_configs:
         try:
-            downloaded = False
+            downloaded = config["check_downloaded"]()
             size_mb = float(config["estimated_size_mb"]) or None
             loaded = False
 
-            if cache_info:
+            if cache_info and not config["artifact_filename"]:
                 repo_id = config["hf_repo_id"]
                 for repo in cache_info.repos:
                     if repo.repo_id == repo_id:
@@ -475,7 +477,7 @@ async def get_model_status():
                                 pass
                         break
 
-            if not downloaded:
+            if not downloaded and not config["artifact_filename"]:
                 try:
                     cache_dir = hf_constants.HF_HUB_CACHE
                     repo_cache = Path(cache_dir) / ("models--" + config["hf_repo_id"].replace("/", "--"))

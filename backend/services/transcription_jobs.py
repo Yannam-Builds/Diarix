@@ -59,23 +59,7 @@ def resolve_job_options(model: str | None, precision: str | None) -> tuple[Model
 
 def resolve_job_language(model_config: ModelConfig, language: str | None) -> str:
     """Validate language hints against the selected model's real capabilities."""
-    requested = (language or "auto").strip().lower() or "auto"
-    supported = {code.lower() for code in model_config.languages}
-    if requested == "auto":
-        if "language_detection" in model_config.capabilities:
-            return "auto"
-        if len(supported) == 1:
-            return next(iter(supported))
-        raise ValueError(
-            f"{model_config.display_name} requires an explicit language: "
-            f"{', '.join(sorted(supported))}."
-        )
-    if requested not in supported:
-        raise ValueError(
-            f"Language '{requested}' is not supported by {model_config.display_name}. "
-            f"Choose one of: {', '.join(sorted(supported))}."
-        )
-    return requested
+    return transcribe.resolve_stt_language(model_config, language)
 
 
 def resolve_output_directory(output_dir: str | None) -> Path:

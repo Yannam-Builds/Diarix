@@ -5,11 +5,15 @@ import { convertToWav } from '@/lib/utils/audio';
 interface UseAudioRecordingOptions {
   maxDurationSeconds?: number;
   onRecordingComplete?: (blob: Blob, duration?: number) => void;
+  onPcmChunk?: (pcm: Float32Array, sampleRate: number) => void;
+  onPcmEnd?: () => void;
 }
 
 export function useAudioRecording({
   maxDurationSeconds,
   onRecordingComplete,
+  onPcmChunk,
+  onPcmEnd,
 }: UseAudioRecordingOptions = {}) {
   const platform = usePlatform();
   const [isRecording, setIsRecording] = useState(false);
@@ -21,8 +25,44 @@ export function useAudioRecording({
   const timerRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const cancelledRef = useRef<boolean>(false);
+  const startingRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioWorkletRef = useRef<AudioWorkletNode | null>(null);
+  const audioSinkRef = useRef<GainNode | null>(null);
+  const onPcmChunkRef = useRef(onPcmChunk);
+  const onPcmEndRef = useRef(onPcmEnd);
+  onPcmChunkRef.current = onPcmChunk;
+  onPcmEndRef.current = onPcmEnd;
+
+  const stopPcmCapture = useCallback((notifyEnd: boolean) => {
+    const worklet = audioWorkletRef.current;
+    if (worklet) {
+      worklet.port.onmessage = null;
+      worklet.disconnect();
+    }
+    audioSourceRef.current?.disconnect();
+    audioSinkRef.current?.disconnect();
+    audioWorkletRef.current = null;
+    audioSourceRef.current = null;
+    audioSinkRef.current = null;
+
+    const context = audioContextRef.current;
+    audioContextRef.current = null;
+    if (context && context.state !== 'closed') {
+      void context.close();
+    }
+    if (notifyEnd) onPcmEndRef.current?.();
+  }, []);
 
   const startRecording = useCallback(async () => {
+    if (
+      startingRef.current ||
+      (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive')
+    ) {
+      return;
+    }
+    startingRef.current = true;
     try {
       setError(null);
       chunksRef.current = [];
@@ -68,6 +108,36 @@ export function useAudioRecording({
       });
 
       streamRef.current = stream;
+
+      // Capture raw microphone frames alongside MediaRecorder. The worklet
+      // never replaces the complete WAV fallback; it supplies low-latency PCM
+      // only when the selected backend confirms true streaming support.
+      try {
+        const context = new AudioContext();
+        await context.audioWorklet.addModule('/pcm-capture-worklet.js');
+        const sourceNode = context.createMediaStreamSource(stream);
+        const workletNode = new AudioWorkletNode(context, 'diarix-pcm-capture');
+        const silentSink = context.createGain();
+        silentSink.gain.value = 0;
+        workletNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
+          const pcm =
+            event.data instanceof Float32Array
+              ? event.data
+              : new Float32Array(event.data);
+          onPcmChunkRef.current?.(pcm, context.sampleRate);
+        };
+        sourceNode.connect(workletNode);
+        workletNode.connect(silentSink);
+        silentSink.connect(context.destination);
+        await context.resume();
+        audioContextRef.current = context;
+        audioSourceRef.current = sourceNode;
+        audioWorkletRef.current = workletNode;
+        audioSinkRef.current = silentSink;
+      } catch (liveError) {
+        console.warn('[dictation] raw PCM capture unavailable:', liveError);
+        stopPcmCapture(false);
+      }
 
       // Create MediaRecorder with preferred MIME type
       const options: MediaRecorderOptions = {
@@ -144,6 +214,7 @@ export function useAudioRecording({
           // keep reference clips short.
           if (maxDurationSeconds !== undefined && elapsed >= maxDurationSeconds) {
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+              stopPcmCapture(true);
               mediaRecorderRef.current.stop();
               setIsRecording(false);
               if (timerRef.current !== null) {
@@ -161,11 +232,14 @@ export function useAudioRecording({
           : 'Failed to access microphone. Please check permissions.';
       setError(errorMessage);
       setIsRecording(false);
+    } finally {
+      startingRef.current = false;
     }
-  }, [maxDurationSeconds, onRecordingComplete]);
+  }, [maxDurationSeconds, onRecordingComplete, stopPcmCapture]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
+      stopPcmCapture(true);
       mediaRecorderRef.current.stop();
       setIsRecording(false);
 
@@ -174,13 +248,15 @@ export function useAudioRecording({
         timerRef.current = null;
       }
     }
-  }, [isRecording]);
+  }, [isRecording, stopPcmCapture]);
 
   const cancelRecording = useCallback(() => {
-    if (mediaRecorderRef.current) {
+    stopPcmCapture(false);
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
       cancelledRef.current = true; // Must be set before stop() triggers onstop
       chunksRef.current = [];
-      mediaRecorderRef.current.stop();
+      recorder.stop();
       setIsRecording(false);
       setDuration(0);
     }
@@ -195,7 +271,7 @@ export function useAudioRecording({
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-  }, []);
+  }, [stopPcmCapture]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -203,11 +279,12 @@ export function useAudioRecording({
       if (timerRef.current !== null) {
         clearInterval(timerRef.current);
       }
+      stopPcmCapture(false);
       streamRef.current?.getTracks().forEach((track) => {
         track.stop();
       });
     };
-  }, []);
+  }, [stopPcmCapture]);
 
   return {
     isRecording,

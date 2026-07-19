@@ -96,8 +96,8 @@ def find_binary() -> Optional[Path]:
     is_win = platform.system() == "Windows"
     exe = ".exe" if is_win else ""
     candidates = [
-        DIST_DIR / "voicebox-server-cuda" / f"voicebox-server-cuda{exe}",
-        DIST_DIR / f"voicebox-server{exe}",
+        DIST_DIR / "diarix-server-cuda" / f"diarix-server-cuda{exe}",
+        DIST_DIR / f"diarix-server{exe}",
     ]
     for c in candidates:
         if c.exists() and c.is_file():

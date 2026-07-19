@@ -43,6 +43,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { apiClient } from '@/lib/api/client';
 import type { ActiveDownloadTask, HuggingFaceModelInfo, ModelStatus } from '@/lib/api/types';
 import { useModelDownloadToast } from '@/lib/hooks/useModelDownloadToast';
+import { modelRuntimeLabel } from '@/lib/utils/sttModels';
 import { usePlatform } from '@/platform/PlatformContext';
 import { useServerStore } from '@/stores/serverStore';
 
@@ -640,9 +641,9 @@ export function ModelManagement() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-sm font-medium truncate">{model.display_name}</span>
-                          {model.runtime_group !== 'core' && (
+                          {modelRuntimeLabel(model.runtime_group) && (
                             <Badge variant="outline" className="h-5 text-[10px] shrink-0">
-                              Advanced ASR
+                              {modelRuntimeLabel(model.runtime_group)}
                             </Badge>
                           )}
                         </div>
@@ -798,9 +799,9 @@ export function ModelManagement() {
                       {t('common.error')}
                     </Badge>
                   )}
-                  {freshSelectedModel.runtime_group !== 'core' && (
+                  {modelRuntimeLabel(freshSelectedModel.runtime_group) && (
                     <Badge variant="outline" className="text-xs">
-                      Advanced ASR runtime
+                      {modelRuntimeLabel(freshSelectedModel.runtime_group)} runtime
                     </Badge>
                   )}
                   {freshSelectedModel.recommended && (

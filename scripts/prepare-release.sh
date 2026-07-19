@@ -7,14 +7,14 @@ set -e
 
 echo "🔑 Checking for signing keys..."
 
-if [ ! -f ~/.tauri/voicebox.key ]; then
-  echo "❌ Private key not found at ~/.tauri/voicebox.key"
-  echo "Run: cd tauri && bun tauri signer generate -w ~/.tauri/voicebox.key"
+if [ ! -f ~/.tauri/diarix.key ]; then
+  echo "❌ Private key not found at ~/.tauri/diarix.key"
+  echo "Run: cd tauri && bun tauri signer generate -w ~/.tauri/diarix.key"
   exit 1
 fi
 
-if [ ! -f ~/.tauri/voicebox.key.pub ]; then
-  echo "❌ Public key not found at ~/.tauri/voicebox.key.pub"
+if [ ! -f ~/.tauri/diarix.key.pub ]; then
+  echo "❌ Public key not found at ~/.tauri/diarix.key.pub"
   exit 1
 fi
 
@@ -27,18 +27,21 @@ if grep -q "REPLACE_WITH_YOUR_PUBLIC_KEY" tauri/src-tauri/tauri.conf.json; then
   echo ""
   echo "Add this to tauri/src-tauri/tauri.conf.json:"
   echo ""
-  cat ~/.tauri/voicebox.key.pub
+  cat ~/.tauri/diarix.key.pub
   echo ""
   exit 1
 fi
 
 echo "🔧 Setting up environment..."
 
-export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/voicebox.key)"
+export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/diarix.key)"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 
 echo "✅ Environment configured"
 echo ""
+
+echo "🔎 Verifying alpha contracts..."
+node scripts/verify-alpha.mjs
 
 echo "📦 Building release..."
 echo ""

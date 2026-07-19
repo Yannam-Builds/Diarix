@@ -230,6 +230,16 @@ fn process_event(
 // Effect → Tauri
 // ========================================================================
 
+pub fn stop_dictation(app: &AppHandle) {
+    apply_effect(app, Effect::StopRecording(ChordAction::PushToTalk));
+}
+
+pub fn cancel_dictation(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(DICTATE_WINDOW_LABEL) {
+        let _ = window.emit("dictate:cancel", ());
+    }
+}
+
 fn apply_effect(app: &AppHandle, effect: Effect) {
     match effect {
         Effect::StartRecording(_) => {

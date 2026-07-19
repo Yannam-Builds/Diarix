@@ -362,51 +362,13 @@ class ResourceSettingsUpdate(BaseModel):
     limits_enabled: Optional[bool] = None
 
 
-class MCPClientBindingResponse(BaseModel):
-    """Per-MCP-client voice binding — what voice / engine the server should
-    use when a given client_id calls voicebox.speak without args, plus an
-    opt-in personality-rewrite default."""
-
-    client_id: str
-    label: Optional[str] = None
-    profile_id: Optional[str] = None
-    default_engine: Optional[str] = Field(
-        None,
-        pattern="^(qwen|qwen_custom_voice|luxtts|chatterbox|chatterbox_turbo|tada|kokoro)$",
-    )
-    default_personality: bool = False
-    last_seen_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class MCPClientBindingUpsert(BaseModel):
-    """Create or update a binding. Matched by ``client_id``."""
-
-    client_id: str = Field(..., min_length=1, max_length=64)
-    label: Optional[str] = Field(None, max_length=128)
-    profile_id: Optional[str] = None
-    default_engine: Optional[str] = Field(
-        None,
-        pattern="^(qwen|qwen_custom_voice|luxtts|chatterbox|chatterbox_turbo|tada|kokoro)$",
-    )
-    default_personality: bool = False
-
-
-class MCPClientBindingListResponse(BaseModel):
-    items: List[MCPClientBindingResponse]
-
-
 class SpeakRequest(BaseModel):
-    """Body for POST /speak — non-MCP REST surface that mirrors voicebox.speak."""
+    """Body for the local REST speech-generation surface."""
 
     text: str = Field(..., min_length=1, max_length=10000)
     profile: Optional[str] = Field(
         None,
-        description="Voice profile name or id. Falls back to per-client binding, then default.",
+        description="Voice profile name or id. Falls back to the global playback default.",
     )
     engine: Optional[str] = Field(
         None,
@@ -472,6 +434,7 @@ class ModelReadiness(BaseModel):
     display_name: str
     size: str
     size_mb: Optional[int] = None
+    live_supported: bool = False
 
 
 class CaptureReadinessResponse(BaseModel):
@@ -878,24 +841,3 @@ class AvailableEffectsResponse(BaseModel):
     """Response listing all available effect types."""
 
     effects: List[AvailableEffect]
-
-
-# ─── Cloud (backup & sync) ──────────────────────────────────────────────
-
-
-class CloudLoginStartResponse(BaseModel):
-    """Returned when the desktop kicks off browser login. The backend has
-    already opened the browser; the URL is included for fallback/debugging."""
-
-    authorize_url: str
-
-
-class CloudStatusResponse(BaseModel):
-    """Current link between this device and a Voicebox Cloud account."""
-
-    connected: bool
-    device_name: Optional[str] = None
-    account_user_id: Optional[str] = None
-    key_prefix: Optional[str] = None
-    connected_at: Optional[datetime] = None
-    dashboard_url: str

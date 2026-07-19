@@ -238,6 +238,7 @@ export interface ModelReadiness {
   display_name: string;
   size: string;
   size_mb?: number | null;
+  live_supported: boolean;
 }
 
 /** Backend half of the dictation readiness check. The frontend combines this
@@ -597,44 +598,4 @@ export interface ApplyEffectsRequest {
   source_version_id?: string;
   label?: string;
   set_as_default?: boolean;
-}
-
-/* ─── MCP ─────────────────────────────────────────────────────────────── */
-
-export interface MCPClientBinding {
-  client_id: string;
-  label: string | null;
-  profile_id: string | null;
-  default_engine: string | null;
-  default_personality: boolean;
-  last_seen_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface MCPClientBindingUpsert {
-  client_id: string;
-  label?: string | null;
-  profile_id?: string | null;
-  default_engine?: string | null;
-  default_personality?: boolean;
-}
-
-export interface MCPClientBindingListResponse {
-  items: MCPClientBinding[];
-}
-
-/* ─── Cloud (backup & sync) ───────────────────────────────────────────── */
-
-export interface CloudLoginStartResponse {
-  authorize_url: string;
-}
-
-export interface CloudStatus {
-  connected: boolean;
-  device_name: string | null;
-  account_user_id: string | null;
-  key_prefix: string | null;
-  connected_at: string | null;
-  dashboard_url: string;
 }

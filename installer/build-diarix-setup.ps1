@@ -1,89 +1,172 @@
-# Assemble the Diarix 0.1.0 standalone installer: Diarix.exe + CPU sidecar +
-# CUDA onedir backend, NO pre-downloaded starter models (unlike the 0.5.0
-# CUDA release). First app launch starts with an empty model cache and the
-# user downloads models from the Models page.
-#
-# Prerequisites (all local to this machine):
-#   - Toolchains: Z:\Diarix Studio\Toolchains  (bun, cargo/rustup)
-#   - Python env with backend + advanced-ASR deps: Z:\#####Transcription\Python311
-#   - Inno Setup 6 (ISCC.exe) for the final installer compile
-#
-# Steps (each is idempotent; re-run from any point):
-#   1. CPU server     -> backend/dist/diarix-server.exe
-#   2. CUDA onedir    -> backend/dist/diarix-server-cuda/
-#   3. Tauri release  -> tauri/src-tauri/target/release/Diarix.exe
-#   4. Payload        -> Z:\Diarix Studio\Diarix Setup Payload 0.1.0
-#   5. Installer      -> Z:\Diarix Studio\Diarix Setup 0.1.0\Diarix Setup.exe (+ .bin slices)
-#
-# MCP (agent integration) is not built or bundled here - unwired from the
-# backend for now (see backend/app.py create_app()), can be reinstated later.
+[CmdletBinding()]
+param(
+    [ValidateSet('Core', 'Whisper', 'FullCuda')]
+    [string]$Edition = 'FullCuda',
+
+    [string]$Version = '0.1.0-alpha.1',
+    [string]$ArtifactsDir = '',
+    [string]$ToolchainsDir = 'Z:\Diarix Studio\Toolchains',
+    [string]$CpuPython = '',
+    [string]$CudaPython = 'Z:\Diarix Studio\diarix-cuda-venv\Scripts\python.exe',
+    [string]$StarterModelsPath = '',
+    [ValidateRange(10, 100)]
+    [int]$BuildCpuPercent = 25,
+    [switch]$SkipBuild
+)
 
 $ErrorActionPreference = 'Stop'
+$RepoRoot = Split-Path -Parent $PSScriptRoot
 
-$RepoRoot   = Split-Path -Parent $PSScriptRoot
-$Toolchains = 'Z:\Diarix Studio\Toolchains'
-$Python     = 'Z:\#####Transcription\Python311\python.exe'
-$PayloadDir = 'Z:\Diarix Studio\Diarix Setup Payload 0.1.0'
-$OutputDir  = 'Z:\Diarix Studio\Diarix Setup 0.1.0'
+if (-not $ArtifactsDir) {
+    $ArtifactsDir = Join-Path $RepoRoot 'artifacts'
+}
+if (-not $CpuPython) {
+    $CpuPython = Join-Path $RepoRoot 'backend\venv\Scripts\python.exe'
+}
 
-$env:PATH        = "$Toolchains\bun;$Toolchains\cargo\bin;$env:PATH"
-$env:RUSTUP_HOME = "$Toolchains\rustup"
-$env:CARGO_HOME  = "$Toolchains\cargo"
+$ArtifactsDir = [IO.Path]::GetFullPath($ArtifactsDir)
+$EditionSlug = switch ($Edition) {
+    'Core' { 'core' }
+    'Whisper' { 'whisper' }
+    'FullCuda' { 'full-cuda' }
+}
+$EditionName = switch ($Edition) {
+    'Core' { 'Core' }
+    'Whisper' { 'Whisper' }
+    'FullCuda' { 'Full CUDA' }
+}
+$PayloadDir = Join-Path $ArtifactsDir "payloads\$EditionSlug-$Version"
+$OutputDir = Join-Path $ArtifactsDir 'installers'
+
+function Invoke-Checked {
+    param([string]$FilePath, [string[]]$Arguments = @())
+
+    & $FilePath @Arguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed ($LASTEXITCODE): $FilePath $($Arguments -join ' ')"
+    }
+}
+
+function Reset-ArtifactDirectory {
+    param([string]$Path)
+
+    $resolvedRoot = [IO.Path]::GetFullPath($ArtifactsDir).TrimEnd('\') + '\'
+    $resolvedPath = [IO.Path]::GetFullPath($Path)
+    if (-not $resolvedPath.StartsWith($resolvedRoot, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to replace a directory outside the artifacts root: $resolvedPath"
+    }
+    if (Test-Path -LiteralPath $resolvedPath) {
+        Remove-Item -LiteralPath $resolvedPath -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $resolvedPath -Force | Out-Null
+}
+
+$bun = Join-Path $ToolchainsDir 'bun\bun.cmd'
+$cargoBin = Join-Path $ToolchainsDir 'cargo\bin'
+$rustupHome = Join-Path $ToolchainsDir 'rustup'
+$rustBin = Join-Path $rustupHome 'toolchains\stable-x86_64-pc-windows-msvc\bin'
+$rustc = Join-Path $rustBin 'rustc.exe'
+foreach ($required in @($bun, $CpuPython, $rustc)) {
+    if (-not (Test-Path -LiteralPath $required)) {
+        throw "Required build tool not found: $required"
+    }
+}
+if ($Edition -eq 'FullCuda' -and -not (Test-Path -LiteralPath $CudaPython)) {
+    throw "FullCuda requires the CUDA build environment: $CudaPython"
+}
+if ($Edition -eq 'Whisper' -and (-not $StarterModelsPath -or -not (Test-Path -LiteralPath $StarterModelsPath))) {
+    throw 'Whisper edition requires -StarterModelsPath pointing to the starter model directory.'
+}
+
+$logicalProcessors = [Environment]::ProcessorCount
+$buildJobs = [Math]::Max(1, [Math]::Floor($logicalProcessors * ($BuildCpuPercent / 100)))
+$env:PATH = "$($ToolchainsDir)\bun;$rustBin;$cargoBin;$env:PATH"
+$env:RUSTUP_HOME = $rustupHome
+$env:CARGO_HOME = Join-Path $ToolchainsDir 'cargo'
+$env:CARGO_BUILD_JOBS = "$buildJobs"
+$env:MAX_JOBS = "$buildJobs"
+$env:OMP_NUM_THREADS = "$buildJobs"
+$env:MKL_NUM_THREADS = "$buildJobs"
 
 Set-Location $RepoRoot
+Invoke-Checked 'node' @('scripts/verify-alpha.mjs')
 
-# --- 1. CPU server ----------------------------------------------------------
-Write-Host '== Building CPU server (diarix-server.exe) =='
-Set-Location "$RepoRoot\backend"
-& $Python build_binary.py --require-media-tools
-if ($LASTEXITCODE -ne 0) { throw 'CPU server build failed' }
+if (-not $SkipBuild) {
+    Write-Host "== Building compact server with $buildJobs worker(s) =="
+    Set-Location (Join-Path $RepoRoot 'backend')
+    Invoke-Checked $CpuPython @('build_binary.py', '--require-media-tools')
 
-# --- 2. CUDA onedir --------------------------------------------------------
-Write-Host '== Building CUDA onedir (diarix-server-cuda) =='
-& $Python build_binary.py --cuda --require-media-tools
-if ($LASTEXITCODE -ne 0) { throw 'CUDA server build failed' }
+    if ($Edition -eq 'FullCuda') {
+        Write-Host "== Building CUDA server with $buildJobs worker(s) =="
+        Invoke-Checked $CudaPython @('build_binary.py', '--cuda', '--require-media-tools')
+        Invoke-Checked (Join-Path $RepoRoot 'backend\dist\diarix-server-cuda\diarix-server-cuda.exe') @('--runtime-self-test')
+    }
 
-# Frozen-runtime self test: all registered engines must import inside the
-# bundle before we ship it (mirrors the 2026-07-15 release gate).
-Write-Host '== Runtime self-test on the frozen CUDA bundle =='
-& "$RepoRoot\backend\dist\diarix-server-cuda\diarix-server-cuda.exe" --runtime-self-test
-if ($LASTEXITCODE -ne 0) { throw 'Frozen runtime self-test failed' }
+    Write-Host '== Building Tauri desktop =='
+    Set-Location $RepoRoot
+    Invoke-Checked $bun @('install', '--frozen-lockfile')
+    $triple = (& $rustc --print host-tuple).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Unable to resolve the Rust host tuple.' }
+    $sidecarDir = Join-Path $RepoRoot 'tauri\src-tauri\binaries'
+    New-Item -ItemType Directory -Path $sidecarDir -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $RepoRoot 'backend\dist\diarix-server.exe') `
+        -Destination (Join-Path $sidecarDir "diarix-server-$triple.exe") -Force
+    Set-Location (Join-Path $RepoRoot 'tauri')
+    # The edition installers are assembled by Inno Setup below. Building the
+    # desktop executable without Tauri's MSI bundler also keeps semantic alpha
+    # versions such as 0.1.0-alpha.1 valid on Windows.
+    Invoke-Checked $bun @('tauri', 'build', '--no-bundle')
+}
 
-# --- 4. Tauri release ------------------------------------------------------
-Write-Host '== Building Tauri release (Diarix.exe) =='
-Set-Location $RepoRoot
-$triple = (& rustc --print host-tuple).Trim()
-New-Item -ItemType Directory -Force "$RepoRoot\tauri\src-tauri\binaries" | Out-Null
-Copy-Item "$RepoRoot\backend\dist\diarix-server.exe" "$RepoRoot\tauri\src-tauri\binaries\diarix-server-$triple.exe" -Force
-bun install
-if ($LASTEXITCODE -ne 0) { throw 'bun install failed' }
-Set-Location "$RepoRoot\tauri"
-bun tauri build
-if ($LASTEXITCODE -ne 0) { throw 'tauri build failed' }
+$triple = (& $rustc --print host-tuple).Trim()
+$desktopExe = Join-Path $RepoRoot 'tauri\src-tauri\target\release\diarix.exe'
+$compactServer = Join-Path $RepoRoot 'backend\dist\diarix-server.exe'
+foreach ($required in @($desktopExe, $compactServer)) {
+    if (-not (Test-Path -LiteralPath $required)) {
+        throw "Required release artifact not found: $required"
+    }
+}
 
-# --- 5. Payload assembly (no starter models) -------------------------------
-Write-Host '== Assembling payload =='
-if (Test-Path $PayloadDir) { Remove-Item -Recurse -Force $PayloadDir }
-New-Item -ItemType Directory -Force "$PayloadDir\backends\cuda" | Out-Null
+Write-Host "== Assembling $EditionName payload =="
+Reset-ArtifactDirectory $PayloadDir
+Copy-Item -LiteralPath $desktopExe -Destination (Join-Path $PayloadDir 'Diarix.exe') -Force
+Copy-Item -LiteralPath $compactServer `
+    -Destination (Join-Path $PayloadDir 'diarix-server.exe') -Force
 
-Copy-Item "$RepoRoot\tauri\src-tauri\target\release\Diarix.exe" $PayloadDir -Force
-# CPU sidecar ships beside the app under its Tauri sidecar name so
-# app.shell().sidecar("diarix-server") resolves in the installed layout.
-Copy-Item "$RepoRoot\backend\dist\diarix-server.exe" "$PayloadDir\diarix-server-$triple.exe" -Force
-Copy-Item "$RepoRoot\backend\dist\diarix-server-cuda\*" "$PayloadDir\backends\cuda" -Recurse -Force
+if ($Edition -eq 'FullCuda') {
+    $cudaSource = Join-Path $RepoRoot 'backend\dist\diarix-server-cuda'
+    if (-not (Test-Path -LiteralPath $cudaSource)) {
+        throw "CUDA server output not found: $cudaSource"
+    }
+    $cudaDestination = Join-Path $PayloadDir 'backends\cuda'
+    New-Item -ItemType Directory -Path $cudaDestination -Force | Out-Null
+    Copy-Item -Path (Join-Path $cudaSource '*') -Destination $cudaDestination -Recurse -Force
+}
 
-# Deliberately NO models/ or starter Hugging Face cache in this payload.
+if ($Edition -eq 'Whisper') {
+    $modelDestination = Join-Path $PayloadDir 'models'
+    New-Item -ItemType Directory -Path $modelDestination -Force | Out-Null
+    Copy-Item -Path (Join-Path ([IO.Path]::GetFullPath($StarterModelsPath)) '*') `
+        -Destination $modelDestination -Recurse -Force
+}
 
-# --- 6. Installer ----------------------------------------------------------
-Write-Host '== Compiling installer =='
-New-Item -ItemType Directory -Force $OutputDir | Out-Null
 $iscc = @(
-  "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-  "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
-  "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
-if (-not $iscc) { throw 'ISCC.exe (Inno Setup 6) not found - install it or add its path here.' }
-& $iscc "$RepoRoot\installer\DiarixSetup.iss"
-if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compile failed' }
+    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $iscc) {
+    throw 'Inno Setup 6 was not found. Install it before compiling an alpha installer.'
+}
 
-Write-Host "Done. Installer written to $OutputDir"
+New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+Write-Host '== Compiling Inno Setup bundle =='
+Invoke-Checked $iscc @(
+    "/DAppVersion=$Version",
+    "/DEditionName=$EditionName",
+    "/DPayloadDir=$PayloadDir",
+    "/DOutputDir=$OutputDir",
+    (Join-Path $PSScriptRoot 'DiarixSetup.iss')
+)
+
+Write-Host "Installer complete: $OutputDir"

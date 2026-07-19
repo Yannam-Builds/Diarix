@@ -41,7 +41,4 @@ copy_sidecar() {
 python build_binary.py --require-media-tools
 copy_sidecar diarix-server
 
-# MCP shim (voicebox-mcp) intentionally not built: MCP is unwired from the
-# backend for now (see backend/app.py create_app()).
-
 echo "Build complete!"

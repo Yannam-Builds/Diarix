@@ -53,11 +53,6 @@ import type {
   GenerationSettingsUpdate,
   ResourceSettings,
   ResourceSettingsUpdate,
-  MCPClientBinding,
-  MCPClientBindingListResponse,
-  MCPClientBindingUpsert,
-  CloudLoginStartResponse,
-  CloudStatus,
 } from './types';
 
 function formatErrorDetail(detail: unknown, fallback: string): string {
@@ -502,7 +497,8 @@ class ApiClient {
     options?: {
       source?: CaptureSource;
       language?: LanguageCode;
-      sttModel?: WhisperModelSize;
+      sttModel?: string;
+      operationId?: string;
     },
   ): Promise<CaptureCreateResponse> {
     const formData = new FormData();
@@ -510,6 +506,7 @@ class ApiClient {
     formData.append('source', options?.source ?? 'file');
     if (options?.language) formData.append('language', options.language);
     if (options?.sttModel) formData.append('stt_model', options.sttModel);
+    if (options?.operationId) formData.append('operation_id', options.operationId);
 
     const url = `${this.getBaseUrl()}/captures`;
     const response = await fetch(url, { method: 'POST', body: formData });
@@ -531,11 +528,22 @@ class ApiClient {
   async refineCapture(
     captureId: string,
     body: CaptureRefineRequest,
+    operationId?: string,
   ): Promise<CaptureResponse> {
     return this.request<CaptureResponse>(`/captures/${captureId}/refine`, {
       method: 'POST',
       body: JSON.stringify(body),
+      headers: operationId ? { 'X-Diarix-Operation-ID': operationId } : undefined,
     });
+  }
+
+  async cancelCaptureOperation(
+    operationId: string,
+  ): Promise<{ operation_id: string; cancelled: boolean }> {
+    return this.request<{ operation_id: string; cancelled: boolean }>(
+      `/captures/operations/${encodeURIComponent(operationId)}/cancel`,
+      { method: 'POST' },
+    );
   }
 
   async retranscribeCapture(
@@ -569,6 +577,15 @@ class ApiClient {
     return this.request('/capture/warm', { method: 'POST' });
   }
 
+  getLiveCaptureWebSocketUrl(): string {
+    const url = new URL(this.getBaseUrl());
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.pathname = '/captures/live';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  }
+
   async updateCaptureSettings(patch: CaptureSettingsUpdate): Promise<CaptureSettings> {
     return this.request<CaptureSettings>('/settings/captures', {
       method: 'PUT',
@@ -598,27 +615,6 @@ class ApiClient {
       method: 'PUT',
       body: JSON.stringify(patch),
     });
-  }
-
-  // MCP bindings — per-MCP-client voice/engine/personality mapping.
-  async listMCPBindings(): Promise<MCPClientBindingListResponse> {
-    return this.request<MCPClientBindingListResponse>('/mcp/bindings');
-  }
-
-  async upsertMCPBinding(
-    data: MCPClientBindingUpsert,
-  ): Promise<MCPClientBinding> {
-    return this.request<MCPClientBinding>('/mcp/bindings', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteMCPBinding(clientId: string): Promise<{ deleted: string }> {
-    return this.request<{ deleted: string }>(
-      `/mcp/bindings/${encodeURIComponent(clientId)}`,
-      { method: 'DELETE' },
-    );
   }
 
   // Model Management
@@ -1042,20 +1038,6 @@ class ApiClient {
     return response.blob();
   }
 
-  // Cloud (backup & sync) — browser-based device login. startCloudLogin opens
-  // the system browser server-side; the UI then polls getCloudStatus until the
-  // backend completes the exchange and the link goes live.
-  async getCloudStatus(): Promise<CloudStatus> {
-    return this.request<CloudStatus>('/cloud/status');
-  }
-
-  async startCloudLogin(): Promise<CloudLoginStartResponse> {
-    return this.request<CloudLoginStartResponse>('/cloud/login/start', { method: 'POST' });
-  }
-
-  async disconnectCloud(): Promise<CloudStatus> {
-    return this.request<CloudStatus>('/cloud/disconnect', { method: 'POST' });
-  }
 }
 
 export const apiClient = new ApiClient();
