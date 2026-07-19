@@ -122,6 +122,7 @@ def package(
     cuda_libs_version: str,
     torch_compat: str,
     reuse_server: bool = False,
+    reuse_cuda_libs: bool = False,
 ):
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -176,59 +177,84 @@ def package(
     print(f"  Size: {server_archive.stat().st_size / (1024**2):.1f} MB")
     print(f"  SHA-256: {server_sha[:16]}...")
 
-    # CUDA/torch DLLs compress poorly and can exceed GitHub's 2 GiB per-asset
-    # limit. Split them into balanced archives that the app downloads and
-    # verifies independently.
-    legacy_archive = output_dir / f"cuda-libs-{cuda_libs_version}.tar.gz"
-    legacy_checksum = output_dir / f"{legacy_archive.name}.sha256"
-    for stale in (legacy_archive, legacy_checksum):
-        if stale.exists():
-            stale.unlink()
-    for stale in output_dir.glob(f"cuda-libs-{cuda_libs_version}-part*.tar.gz*"):
-        stale.unlink()
-
-    part_count = max(2, math.ceil(nvidia_size / CUDA_PART_TARGET_BYTES))
-    cuda_groups = split_balanced(nvidia_files, part_count)
-    cuda_archives = []
-    for index, group in enumerate(cuda_groups, start=1):
-        cuda_libs_archive = output_dir / (
-            f"cuda-libs-{cuda_libs_version}-part{index}.tar.gz"
-        )
-        print(
-            f"\nCreating CUDA libs archive {index}/{part_count}: "
-            f"{cuda_libs_archive.name}"
-        )
-        with tarfile.open(cuda_libs_archive, "w:gz") as tar:
-            for rel_str, full_path in sorted(group):
-                tar.add(full_path, arcname=rel_str)
-        archive_size = cuda_libs_archive.stat().st_size
-        if archive_size >= GITHUB_ASSET_LIMIT_BYTES:
-            raise RuntimeError(
-                f"{cuda_libs_archive.name} is {archive_size / (1024**3):.2f} GiB; "
-                "increase the CUDA archive part count before release"
-            )
-        cuda_sha = sha256_file(cuda_libs_archive)
-        (output_dir / f"{cuda_libs_archive.name}.sha256").write_text(
-            f"{cuda_sha}  {cuda_libs_archive.name}\n"
-        )
-        cuda_archives.append(
-            {
-                "archive": cuda_libs_archive.name,
-                "sha256": cuda_sha,
-                "size": archive_size,
-            }
-        )
-        print(f"  Size: {archive_size / (1024**2):.1f} MB")
-        print(f"  SHA-256: {cuda_sha[:16]}...")
-
-    # Write cuda-libs.json manifest
-    manifest = {
-        "version": cuda_libs_version,
-        "torch_compat": torch_compat,
-        "archives": cuda_archives,
-    }
     manifest_path = output_dir / "cuda-libs.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    if reuse_cuda_libs:
+        if not manifest_path.exists():
+            raise RuntimeError("Cannot reuse CUDA libraries without cuda-libs.json")
+        manifest = json.loads(manifest_path.read_text())
+        if manifest.get("version") != cuda_libs_version:
+            raise RuntimeError("Existing CUDA libraries manifest version does not match")
+        cuda_archives = manifest.get("archives")
+        if not isinstance(cuda_archives, list) or not cuda_archives:
+            raise RuntimeError("Existing CUDA libraries manifest has no archive parts")
+        print("\nReusing verified CUDA library archive parts")
+        for entry in cuda_archives:
+            archive_name = entry.get("archive") if isinstance(entry, dict) else None
+            if not archive_name or Path(archive_name).name != archive_name:
+                raise RuntimeError("Existing CUDA libraries manifest has an unsafe archive name")
+            archive_path = output_dir / archive_name
+            if not archive_path.exists():
+                raise RuntimeError(f"Missing reusable CUDA archive: {archive_name}")
+            archive_size = archive_path.stat().st_size
+            if archive_size != entry.get("size"):
+                raise RuntimeError(f"Reusable CUDA archive size mismatch: {archive_name}")
+            archive_sha = sha256_file(archive_path)
+            if archive_sha != entry.get("sha256"):
+                raise RuntimeError(f"Reusable CUDA archive checksum mismatch: {archive_name}")
+            print(f"  Verified: {archive_name} ({archive_size / (1024**2):.1f} MB)")
+    else:
+        # CUDA/torch DLLs compress poorly and can exceed GitHub's 2 GiB
+        # per-asset limit. Split them into balanced archives that the app
+        # downloads and verifies independently.
+        legacy_archive = output_dir / f"cuda-libs-{cuda_libs_version}.tar.gz"
+        legacy_checksum = output_dir / f"{legacy_archive.name}.sha256"
+        for stale in (legacy_archive, legacy_checksum):
+            if stale.exists():
+                stale.unlink()
+        for stale in output_dir.glob(f"cuda-libs-{cuda_libs_version}-part*.tar.gz*"):
+            stale.unlink()
+
+        part_count = max(2, math.ceil(nvidia_size / CUDA_PART_TARGET_BYTES))
+        cuda_groups = split_balanced(nvidia_files, part_count)
+        cuda_archives = []
+        for index, group in enumerate(cuda_groups, start=1):
+            cuda_libs_archive = output_dir / (
+                f"cuda-libs-{cuda_libs_version}-part{index}.tar.gz"
+            )
+            print(
+                f"\nCreating CUDA libs archive {index}/{part_count}: "
+                f"{cuda_libs_archive.name}"
+            )
+            with tarfile.open(cuda_libs_archive, "w:gz") as tar:
+                for rel_str, full_path in sorted(group):
+                    tar.add(full_path, arcname=rel_str)
+            archive_size = cuda_libs_archive.stat().st_size
+            if archive_size >= GITHUB_ASSET_LIMIT_BYTES:
+                raise RuntimeError(
+                    f"{cuda_libs_archive.name} is {archive_size / (1024**3):.2f} GiB; "
+                    "increase the CUDA archive part count before release"
+                )
+            cuda_sha = sha256_file(cuda_libs_archive)
+            (output_dir / f"{cuda_libs_archive.name}.sha256").write_text(
+                f"{cuda_sha}  {cuda_libs_archive.name}\n"
+            )
+            cuda_archives.append(
+                {
+                    "archive": cuda_libs_archive.name,
+                    "sha256": cuda_sha,
+                    "size": archive_size,
+                }
+            )
+            print(f"  Size: {archive_size / (1024**2):.1f} MB")
+            print(f"  SHA-256: {cuda_sha[:16]}...")
+
+        manifest = {
+            "version": cuda_libs_version,
+            "torch_compat": torch_compat,
+            "archives": cuda_archives,
+        }
+        manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+
     print(f"\nManifest: {manifest_path.name}")
     print(json.dumps(manifest, indent=2))
 
@@ -279,6 +305,11 @@ def main():
         action="store_true",
         help="Reuse an existing diarix-server-cuda.tar.gz while repackaging CUDA libs",
     )
+    parser.add_argument(
+        "--reuse-cuda-libs",
+        action="store_true",
+        help="Reuse existing CUDA library parts after verifying their manifest, sizes, and hashes",
+    )
     args = parser.parse_args()
 
     if not args.input.is_dir():
@@ -293,6 +324,7 @@ def main():
         args.cuda_libs_version,
         args.torch_compat,
         reuse_server=args.reuse_server,
+        reuse_cuda_libs=args.reuse_cuda_libs,
     )
 
 
