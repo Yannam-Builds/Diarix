@@ -15,6 +15,7 @@ Usage:
 import argparse
 import hashlib
 import json
+import math
 import sys
 import tarfile
 from pathlib import Path
@@ -48,6 +49,12 @@ NVIDIA_KEEP_IN_CORE = {
     "torch/cuda/nccl.py",
     "torch/_inductor/codegen/cuda/cutlass_lib_extensions/cutlass_mock_imports/cuda/cudart.py",
 }
+
+# GitHub rejects release assets at or above 2 GiB. Split the largely
+# incompressible NVIDIA runtime before compression and retain headroom for
+# future CUDA/torch changes.
+CUDA_PART_TARGET_BYTES = int(1.75 * 1024**3)
+GITHUB_ASSET_LIMIT_BYTES = 2 * 1024**3
 
 
 def is_nvidia_file(rel_path: str) -> bool:
@@ -96,11 +103,25 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def split_balanced(files, part_count: int):
+    """Split files into similarly sized deterministic groups."""
+    groups = [[] for _ in range(part_count)]
+    group_sizes = [0] * part_count
+    for rel_str, full_path in sorted(
+        files, key=lambda item: (-item[1].stat().st_size, item[0])
+    ):
+        target = min(range(part_count), key=lambda index: (group_sizes[index], index))
+        groups[target].append((rel_str, full_path))
+        group_sizes[target] += full_path.stat().st_size
+    return groups
+
+
 def package(
     onedir_path: Path,
     output_dir: Path,
     cuda_libs_version: str,
     torch_compat: str,
+    reuse_server: bool = False,
 ):
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -141,10 +162,13 @@ def package(
     # Files are stored relative to the archive root (no parent directory prefix)
     # so extracting to backends/cuda/ puts everything at the right level.
     server_archive = output_dir / "diarix-server-cuda.tar.gz"
-    print(f"\nCreating server core archive: {server_archive.name}")
-    with tarfile.open(server_archive, "w:gz") as tar:
-        for rel_str, full_path in core_files:
-            tar.add(full_path, arcname=rel_str)
+    if reuse_server and server_archive.exists():
+        print(f"\nReusing server core archive: {server_archive.name}")
+    else:
+        print(f"\nCreating server core archive: {server_archive.name}")
+        with tarfile.open(server_archive, "w:gz") as tar:
+            for rel_str, full_path in core_files:
+                tar.add(full_path, arcname=rel_str)
     server_sha = sha256_file(server_archive)
     (output_dir / "diarix-server-cuda.tar.gz.sha256").write_text(
         f"{server_sha}  diarix-server-cuda.tar.gz\n"
@@ -152,25 +176,56 @@ def package(
     print(f"  Size: {server_archive.stat().st_size / (1024**2):.1f} MB")
     print(f"  SHA-256: {server_sha[:16]}...")
 
-    # Create CUDA libs archive
-    cuda_libs_archive = output_dir / f"cuda-libs-{cuda_libs_version}.tar.gz"
-    print(f"\nCreating CUDA libs archive: {cuda_libs_archive.name}")
-    with tarfile.open(cuda_libs_archive, "w:gz") as tar:
-        for rel_str, full_path in nvidia_files:
-            tar.add(full_path, arcname=rel_str)
-    cuda_sha = sha256_file(cuda_libs_archive)
-    (output_dir / f"cuda-libs-{cuda_libs_version}.tar.gz.sha256").write_text(
-        f"{cuda_sha}  cuda-libs-{cuda_libs_version}.tar.gz\n"
-    )
-    print(f"  Size: {cuda_libs_archive.stat().st_size / (1024**2):.1f} MB")
-    print(f"  SHA-256: {cuda_sha[:16]}...")
+    # CUDA/torch DLLs compress poorly and can exceed GitHub's 2 GiB per-asset
+    # limit. Split them into balanced archives that the app downloads and
+    # verifies independently.
+    legacy_archive = output_dir / f"cuda-libs-{cuda_libs_version}.tar.gz"
+    legacy_checksum = output_dir / f"{legacy_archive.name}.sha256"
+    for stale in (legacy_archive, legacy_checksum):
+        if stale.exists():
+            stale.unlink()
+    for stale in output_dir.glob(f"cuda-libs-{cuda_libs_version}-part*.tar.gz*"):
+        stale.unlink()
+
+    part_count = max(2, math.ceil(nvidia_size / CUDA_PART_TARGET_BYTES))
+    cuda_groups = split_balanced(nvidia_files, part_count)
+    cuda_archives = []
+    for index, group in enumerate(cuda_groups, start=1):
+        cuda_libs_archive = output_dir / (
+            f"cuda-libs-{cuda_libs_version}-part{index}.tar.gz"
+        )
+        print(
+            f"\nCreating CUDA libs archive {index}/{part_count}: "
+            f"{cuda_libs_archive.name}"
+        )
+        with tarfile.open(cuda_libs_archive, "w:gz") as tar:
+            for rel_str, full_path in sorted(group):
+                tar.add(full_path, arcname=rel_str)
+        archive_size = cuda_libs_archive.stat().st_size
+        if archive_size >= GITHUB_ASSET_LIMIT_BYTES:
+            raise RuntimeError(
+                f"{cuda_libs_archive.name} is {archive_size / (1024**3):.2f} GiB; "
+                "increase the CUDA archive part count before release"
+            )
+        cuda_sha = sha256_file(cuda_libs_archive)
+        (output_dir / f"{cuda_libs_archive.name}.sha256").write_text(
+            f"{cuda_sha}  {cuda_libs_archive.name}\n"
+        )
+        cuda_archives.append(
+            {
+                "archive": cuda_libs_archive.name,
+                "sha256": cuda_sha,
+                "size": archive_size,
+            }
+        )
+        print(f"  Size: {archive_size / (1024**2):.1f} MB")
+        print(f"  SHA-256: {cuda_sha[:16]}...")
 
     # Write cuda-libs.json manifest
     manifest = {
         "version": cuda_libs_version,
         "torch_compat": torch_compat,
-        "archive": cuda_libs_archive.name,
-        "sha256": cuda_sha,
+        "archives": cuda_archives,
     }
     manifest_path = output_dir / "cuda-libs.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
@@ -179,14 +234,16 @@ def package(
 
     # Summary
     total_input = core_size + nvidia_size
-    total_output = server_archive.stat().st_size + cuda_libs_archive.stat().st_size
+    cuda_output_size = sum(item["size"] for item in cuda_archives)
+    total_output = server_archive.stat().st_size + cuda_output_size
     print(f"\nTotal input:  {total_input / (1024**3):.2f} GB")
     print(f"Total output: {total_output / (1024**3):.2f} GB (compressed)")
     print(
         f"Server core:  {server_archive.stat().st_size / (1024**2):.1f} MB (redownloaded on app update)"
     )
     print(
-        f"CUDA libs:    {cuda_libs_archive.stat().st_size / (1024**2):.1f} MB (cached until CUDA toolkit bump)"
+        f"CUDA libs:    {cuda_output_size / (1024**2):.1f} MB across "
+        f"{len(cuda_archives)} assets (cached until CUDA toolkit bump)"
     )
 
 
@@ -217,6 +274,11 @@ def main():
         default=">=2.7.0,<2.11.0",
         help="Torch version compatibility range (default: >=2.6.0,<2.11.0)",
     )
+    parser.add_argument(
+        "--reuse-server",
+        action="store_true",
+        help="Reuse an existing diarix-server-cuda.tar.gz while repackaging CUDA libs",
+    )
     args = parser.parse_args()
 
     if not args.input.is_dir():
@@ -225,7 +287,13 @@ def main():
         sys.exit(1)
 
     output_dir = args.output or args.input.parent
-    package(args.input, output_dir, args.cuda_libs_version, args.torch_compat)
+    package(
+        args.input,
+        output_dir,
+        args.cuda_libs_version,
+        args.torch_compat,
+        reuse_server=args.reuse_server,
+    )
 
 
 if __name__ == "__main__":

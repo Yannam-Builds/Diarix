@@ -16,16 +16,17 @@ installer and cold-machine experience still require explicit release-gate verifi
 - The compact server and the full CUDA server use the same API, data directory, and model catalog.
 - Speaker diarization and MCP are not part of the alpha.
 
-## Release editions
+## Distribution
 
-| Edition | Contents | Alpha sequencing |
+| Package | Contents | Alpha sequencing |
 |---|---|---|
-| Diarix Core | Desktop app, compact server, FFmpeg/FFprobe, empty model cache | After Full CUDA cold-install sign-off |
-| Diarix + Whisper | Core plus one small GGUF starter model | After Core sign-off |
-| Diarix Full CUDA | Desktop app, compact fallback, complete CUDA-capable server, empty model cache | Alpha 1 candidate |
+| Diarix Core Setup | Desktop app, compact server, FFmpeg/FFprobe, empty model cache | Alpha 1 installer |
+| Whisper models | Model-only downloads managed by Diarix | Available after Core sign-off |
+| CUDA backend | Server core plus verified CUDA-library release parts | Available after CUDA cold-install sign-off |
 
-The compact server already includes the native `transcribe.cpp` runtime. The Whisper edition is
-different because it includes a starter model, not because it creates another Python worker.
+The compact server already includes the native `transcribe.cpp` runtime. Models and the optional
+CUDA backend are downloaded into user data; they do not create another Diarix app or Python worker.
+Every package remains interchangeable against the same library, task API, and cache.
 
 ## Release gate
 

@@ -135,6 +135,60 @@ def _needs_cuda_libs_download() -> bool:
     return installed != CUDA_LIBS_VERSION
 
 
+def _cuda_lib_archive_names(manifest: dict) -> list[str]:
+    """Validate a release manifest and return its safe archive names.
+
+    ``archive`` remains supported for older releases. New releases use an
+    ``archives`` array because GitHub rejects assets at or above 2 GiB.
+    """
+    version = manifest.get("version")
+    if version != CUDA_LIBS_VERSION:
+        raise ValueError(
+            f"CUDA libraries manifest version {version!r} does not match "
+            f"expected {CUDA_LIBS_VERSION!r}"
+        )
+
+    entries = manifest.get("archives")
+    if entries is None:
+        legacy = manifest.get("archive")
+        entries = [{"archive": legacy}] if legacy else []
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("CUDA libraries manifest contains no archives")
+
+    names = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise ValueError("CUDA libraries manifest has an invalid archive entry")
+        name = entry.get("archive")
+        if not isinstance(name, str) or not name:
+            raise ValueError("CUDA libraries manifest archive name is missing")
+        if Path(name).name != name or "\\" in name or "/" in name:
+            raise ValueError(f"Unsafe CUDA libraries archive name: {name!r}")
+        expected_prefix = f"cuda-libs-{CUDA_LIBS_VERSION}"
+        if not name.startswith(expected_prefix) or not name.endswith(".tar.gz"):
+            raise ValueError(f"Unexpected CUDA libraries archive name: {name!r}")
+        if name in names:
+            raise ValueError(f"Duplicate CUDA libraries archive name: {name!r}")
+        names.append(name)
+    return names
+
+
+async def _fetch_cuda_libs_manifest(client, base_url: str) -> tuple[dict, list[str]]:
+    """Fetch and validate the release's CUDA-library manifest."""
+    manifest_url = f"{base_url}/cuda-libs.json"
+    try:
+        response = await client.get(manifest_url)
+        response.raise_for_status()
+        manifest = response.json()
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to fetch CUDA libraries manifest from {manifest_url}"
+        ) from exc
+    if not isinstance(manifest, dict):
+        raise ValueError("CUDA libraries manifest must be a JSON object")
+    return manifest, _cuda_lib_archive_names(manifest)
+
+
 async def _download_and_extract_archive(
     client,
     url: str,
@@ -287,10 +341,16 @@ async def _download_cuda_binary_locked(version: Optional[str] = None):
 
     base_url = f"{GITHUB_RELEASES_URL}/{version}"
     server_archive = "diarix-server-cuda.tar.gz"
-    libs_archive = f"cuda-libs-{CUDA_LIBS_VERSION}.tar.gz"
+    libs_manifest = None
+    libs_archives: list[str] = []
 
     try:
         async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+            if need_libs:
+                libs_manifest, libs_archives = await _fetch_cuda_libs_manifest(
+                    client, base_url
+                )
+
             # Estimate total download size
             total_size = 0
             if need_server:
@@ -300,11 +360,12 @@ async def _download_cuda_binary_locked(version: Optional[str] = None):
                 except Exception:
                     pass
             if need_libs:
-                try:
-                    head = await client.head(f"{base_url}/{libs_archive}")
-                    total_size += int(head.headers.get("content-length", 0))
-                except Exception:
-                    pass
+                for libs_archive in libs_archives:
+                    try:
+                        head = await client.head(f"{base_url}/{libs_archive}")
+                        total_size += int(head.headers.get("content-length", 0))
+                    except Exception:
+                        pass
 
             logger.info(f"Total download size: {total_size / 1024 / 1024:.1f} MB")
 
@@ -330,19 +391,22 @@ async def _download_cuda_binary_locked(version: Optional[str] = None):
 
             # Download CUDA libs
             if need_libs:
-                await _download_and_extract_archive(
-                    client,
-                    url=f"{base_url}/{libs_archive}",
-                    sha256_url=f"{base_url}/{libs_archive}.sha256",
-                    dest_dir=cuda_dir,
-                    label="CUDA libraries",
-                    progress_offset=offset,
-                    total_size=total_size,
-                )
+                for index, libs_archive in enumerate(libs_archives, start=1):
+                    libs_downloaded = await _download_and_extract_archive(
+                        client,
+                        url=f"{base_url}/{libs_archive}",
+                        sha256_url=f"{base_url}/{libs_archive}.sha256",
+                        dest_dir=cuda_dir,
+                        label=f"CUDA libraries {index}/{len(libs_archives)}",
+                        progress_offset=offset,
+                        total_size=total_size,
+                    )
+                    offset += libs_downloaded
 
                 # Write local cuda-libs.json manifest
-                manifest = {"version": CUDA_LIBS_VERSION}
-                get_cuda_libs_manifest_path().write_text(json.dumps(manifest, indent=2) + "\n")
+                get_cuda_libs_manifest_path().write_text(
+                    json.dumps(libs_manifest, indent=2) + "\n"
+                )
 
         logger.info(f"CUDA backend ready at {cuda_dir}")
         progress.mark_complete(PROGRESS_KEY)

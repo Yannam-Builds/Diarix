@@ -50,5 +50,11 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q backend
 
+      - name: Prepare native sidecar contract
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force tauri/src-tauri/binaries | Out-Null
+          New-Item -ItemType File -Force tauri/src-tauri/binaries/diarix-server-x86_64-pc-windows-msvc.exe | Out-Null
+
       - name: Check native shell
         run: cargo check --manifest-path tauri/src-tauri/Cargo.toml

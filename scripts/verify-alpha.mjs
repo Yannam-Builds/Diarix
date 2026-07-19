@@ -100,6 +100,15 @@ for (const service of ["backend/services/cuda.py", "backend/services/rocm.py"]) 
   }
 }
 
+const cudaService = read("backend/services/cuda.py");
+const cudaPackager = read("scripts/package_cuda.py");
+if (!cudaService.includes("_fetch_cuda_libs_manifest")) {
+  failures.push("CUDA downloads must resolve GitHub-sized archive parts from cuda-libs.json");
+}
+if (!cudaPackager.includes("GITHUB_ASSET_LIMIT_BYTES")) {
+  failures.push("CUDA packaging must enforce GitHub's per-asset size limit");
+}
+
 const installerScript = read("installer/build-diarix-setup.ps1");
 if (!/\[int\]\$BuildCpuPercent = 25/.test(installerScript)) {
   failures.push("installer builds must default to 25% of logical CPU workers");

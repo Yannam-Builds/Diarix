@@ -64,11 +64,11 @@ Diarix uses one catalog and one cache across standard Whisper, Faster-Whisper, W
 
 Every edition uses the same data directory, task API, model catalog, cache, captures, profiles, and history. Moving between them must never duplicate or migrate user data.
 
-| Edition | Ships with | Can add later |
+| Package | Ships with | Added from Diarix |
 |---|---|---|
-| **Diarix Core** | Native desktop app, compact server, and an empty model cache | Starter models and CUDA/Advanced ASR |
-| **Diarix + Whisper** | Core plus one compact GGUF starter model | CUDA/Advanced ASR and individual models |
-| **Diarix Full CUDA** | Desktop app, compact fallback, and the complete CUDA-capable server | Any model from the in-app catalog |
+| **Diarix Core Setup** | Native desktop app, compact CPU server, FFmpeg/FFprobe, and an empty model cache | Whisper models, TTS, refinement, and the CUDA backend |
+| **Whisper models** | Downloaded separately into the user-selected model location | Interchangeable local transcription without reinstalling the app |
+| **CUDA backend** | Downloaded as verified release assets and assembled silently by Diarix | Advanced ASR and GPU-accelerated speech runtimes |
 
 ## Dictation lifecycle
 
