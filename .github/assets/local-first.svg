@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 220" role="img" aria-labelledby="title desc">
+  <title id="title">Diarix local by design</title>
+  <desc id="desc">A flowing gold waveform connects untouched source files, user-selected storage, and silent local runtimes.</desc>
+  <defs>
+    <linearGradient id="backdrop" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="var(--bg-edge)"/>
+      <stop offset=".5" stop-color="var(--bg-center)"/>
+      <stop offset="1" stop-color="var(--bg-edge)"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop stop-color="var(--gold)" stop-opacity=".18"/>
+      <stop offset="1" stop-color="var(--gold)" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="15"/></filter>
+    <clipPath id="clip"><rect x="1" y="1" width="1198" height="218" rx="24"/></clipPath>
+    <style>
+      :root {
+        --bg-edge: #090a09;
+        --bg-center: #131109;
+        --panel: #11110f;
+        --stroke: #2b2920;
+        --gold: #f0c65a;
+        --gold-deep: #9a7625;
+        --text: #f3f1e9;
+        --muted: #928f84;
+        --faint: #68665f;
+        --green: #72d59a;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg-edge: #f5f0e5;
+          --bg-center: #fff6dc;
+          --panel: #fffaf0;
+          --stroke: #d4c8a9;
+          --gold: #a87911;
+          --gold-deep: #826118;
+          --text: #211f19;
+          --muted: #665f52;
+          --faint: #8a8376;
+          --green: #287a4a;
+        }
+      }
+      text { font-family: "Segoe UI", Inter, Arial, sans-serif; }
+      .wave-a { animation: drift-a 13s linear infinite; }
+      .wave-b { animation: drift-b 17s linear infinite; }
+      .packet-a { offset-path: path("M-120 129C80 87 212 173 401 124S708 82 880 126S1082 160 1320 105"); animation: packet 7.5s linear infinite; }
+      .packet-b { offset-path: path("M-120 143C88 184 236 91 430 139S722 174 911 126S1110 92 1320 145"); animation: packet 9s linear infinite -3.2s; }
+      .status { animation: status 2.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+      @keyframes drift-a { to { transform: translateX(-600px); } }
+      @keyframes drift-b { to { transform: translateX(600px); } }
+      @keyframes packet { to { offset-distance: 100%; } }
+      @keyframes status { 0%, 100% { opacity: .45; transform: scale(.86); } 50% { opacity: 1; transform: scale(1); } }
+      @media (prefers-reduced-motion: reduce) {
+        .wave-a, .wave-b, .packet-a, .packet-b, .status { animation: none !important; }
+        .packet-a { offset-distance: 35%; }
+        .packet-b { offset-distance: 68%; }
+      }
+    </style>
+  </defs>
+
+  <rect x="1" y="1" width="1198" height="218" rx="24" fill="url(#backdrop)" stroke="var(--stroke)"/>
+  <g clip-path="url(#clip)">
+    <ellipse cx="600" cy="110" rx="350" ry="170" fill="url(#halo)"/>
+    <ellipse cx="600" cy="118" rx="230" ry="42" fill="var(--gold)" opacity=".08" filter="url(#blur)"/>
+
+    <g class="wave-a" fill="none" stroke="var(--gold-deep)" stroke-linecap="round">
+      <path d="M-600 129C-400 87-268 173-79 124S228 82 400 126S602 160 840 105 1085 168 1320 122 1538 83 1800 130" stroke-opacity=".34" stroke-width="1.5"/>
+      <path d="M-600 143C-392 184-244 91-50 139S242 174 431 126S630 92 840 145 1080 91 1320 137 1555 170 1800 118" stroke-opacity=".22" stroke-width="1.2"/>
+    </g>
+    <g class="wave-b" transform="translate(-600 0)" fill="none" stroke="var(--gold)" stroke-linecap="round">
+      <path d="M-600 119C-367 162-244 92-40 127S235 170 448 119 695 101 900 139 1128 163 1380 111 1602 96 1800 126" stroke-opacity=".17" stroke-width="1"/>
+      <path d="M-600 153C-368 114-218 176-18 135S265 95 468 142 722 165 914 120 1137 94 1380 146 1608 147 1800 117" stroke-opacity=".13"/>
+    </g>
+
+    <circle class="packet-a" r="3.5" fill="var(--gold)"/>
+    <circle class="packet-b" r="2.8" fill="var(--gold)" opacity=".78"/>
+  </g>
+
+  <text x="600" y="45" fill="var(--gold)" font-size="10.5" font-weight="700" letter-spacing="2.4" text-anchor="middle">LOCAL BY DESIGN</text>
+  <text x="600" y="79" fill="var(--text)" font-size="25" font-weight="650" letter-spacing="-.45" text-anchor="middle">Your media stays yours.</text>
+  <text x="600" y="101" fill="var(--muted)" font-size="11.5" text-anchor="middle">Install a model once, then transcribe, dictate, generate, and refine on your machine.</text>
+
+  <g transform="translate(76 165)">
+    <line x1="0" y1="-17" x2="250" y2="-17" stroke="var(--stroke)"/>
+    <circle class="status" cx="5" cy="5" r="4" fill="var(--green)"/>
+    <text x="18" y="9" fill="var(--text)" font-size="11" font-weight="600">Original files stay untouched</text>
+  </g>
+  <g transform="translate(475 165)">
+    <line x1="0" y1="-17" x2="250" y2="-17" stroke="var(--stroke)"/>
+    <circle class="status" cx="5" cy="5" r="4" fill="var(--gold)"/>
+    <text x="18" y="9" fill="var(--text)" font-size="11" font-weight="600">You choose model and cache storage</text>
+  </g>
+  <g transform="translate(874 165)">
+    <line x1="0" y1="-17" x2="250" y2="-17" stroke="var(--stroke)"/>
+    <circle class="status" cx="5" cy="5" r="4" fill="var(--gold)"/>
+    <text x="18" y="9" fill="var(--text)" font-size="11" font-weight="600">Production runtimes start silently</text>
+  </g>
+</svg>
