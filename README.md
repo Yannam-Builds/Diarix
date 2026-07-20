@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Yannam-Builds/Diarix/releases/latest"><img alt="Download Diarix" src="https://img.shields.io/badge/download-Windows%20alpha-b98a2d?style=for-the-badge" /></a>
+  <a href="https://github.com/Yannam-Builds/Diarix/releases/tag/v0.1.0-alpha.1"><img alt="Download Diarix" src="https://img.shields.io/badge/download-Windows%20alpha-b98a2d?style=for-the-badge" /></a>
 </p>
 
 <p align="center">
