@@ -52,7 +52,7 @@ CPU and CUDA use the same library, task system, history, model catalog, and cach
 ## What Diarix does
 
 | Transcribe anything | Dictate anywhere | Keep the full studio |
-|---|---|---|
+|:---:|:---:|:---:|
 | Drop audio or video, including MP4, onto the default dashboard. FFprobe inspects the source and FFmpeg creates model-ready audio without changing the original. | Use push-to-talk or toggle dictation from any app. Diarix restores focus, pastes the result, keeps the selected model warm while needed, and releases memory after the configured idle period. | Voice generation, profiles, stories, captures, history, local refinement, downloads, cancellation, and GPU controls stay separate but connected. |
 
 <p align="center">
@@ -175,3 +175,7 @@ The lightweight push-to-talk workflow, warm model lifecycle, and practical offli
 Diarix preserves the upstream MIT license and adds transcription, media ingestion, runtime, dictation, desktop UX, and packaging work. Project code and third-party dependencies retain their respective licenses.
 
 See [`LICENSE`](LICENSE) for the full license text.
+
+<p align="center">
+  <img src=".github/assets/diarix-signoff.svg" alt="Animated Diarix sign-off with converging gold signals and a star" width="100%" />
+</p>

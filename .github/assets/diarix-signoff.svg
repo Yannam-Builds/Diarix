@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="260" viewBox="0 0 1200 260" role="img" aria-labelledby="title desc">
+  <title id="title">Diarix README sign-off animation</title>
+  <desc id="desc">Two gold audio signals meet around a softly pulsing star above the words Your voice. Your machine.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="var(--surface-a)"/>
+      <stop offset=".5" stop-color="var(--surface-b)"/>
+      <stop offset="1" stop-color="var(--surface-a)"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="50%" cy="42%" r="54%">
+      <stop stop-color="var(--gold)" stop-opacity=".18"/>
+      <stop offset=".58" stop-color="var(--gold)" stop-opacity=".05"/>
+      <stop offset="1" stop-color="var(--gold)" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="signal-left" x1="0" y1="0" x2="1" y2="0">
+      <stop stop-color="var(--gold)" stop-opacity="0"/>
+      <stop offset=".78" stop-color="var(--gold)" stop-opacity=".48"/>
+      <stop offset="1" stop-color="var(--gold)"/>
+    </linearGradient>
+    <linearGradient id="signal-right" x1="1" y1="0" x2="0" y2="0">
+      <stop stop-color="var(--gold)" stop-opacity="0"/>
+      <stop offset=".78" stop-color="var(--gold)" stop-opacity=".48"/>
+      <stop offset="1" stop-color="var(--gold)"/>
+    </linearGradient>
+    <filter id="soft-glow" x="-120%" y="-120%" width="340%" height="340%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="frame"><rect x="1" y="1" width="1198" height="258" rx="24"/></clipPath>
+    <style>
+      :root {
+        --surface-a: #090a09;
+        --surface-b: #121008;
+        --panel: #11110f;
+        --stroke: #2b2920;
+        --gold: #f0c65a;
+        --gold-deep: #a47d27;
+        --text: #f3f1e9;
+        --muted: #928f84;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --surface-a: #f5f0e5;
+          --surface-b: #fff5d7;
+          --panel: #fffaf0;
+          --stroke: #d4c8a9;
+          --gold: #9f7312;
+          --gold-deep: #765515;
+          --text: #211f19;
+          --muted: #665f52;
+        }
+      }
+      text { font-family: "Segoe UI", Arial, sans-serif; }
+      .signal-in-left { animation: signal-left 2.8s linear infinite; }
+      .signal-in-right { animation: signal-right 2.8s linear infinite; }
+      .wave-soft { animation: breathe 5s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+      .orbit { animation: orbit 14s linear infinite; transform-origin: 600px 92px; }
+      .star { animation: star-pulse 3.2s cubic-bezier(.4,0,.2,1) infinite; transform-box: fill-box; transform-origin: center; }
+      .ring-a { animation: ring 4.8s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+      .ring-b { animation: ring 4.8s ease-out infinite 2.4s; transform-box: fill-box; transform-origin: center; }
+      @keyframes signal-left { to { stroke-dashoffset: -54; } }
+      @keyframes signal-right { to { stroke-dashoffset: 54; } }
+      @keyframes breathe { 0%, 100% { opacity: .2; transform: scaleY(.8); } 50% { opacity: .48; transform: scaleY(1.08); } }
+      @keyframes orbit { to { transform: rotate(360deg); } }
+      @keyframes star-pulse { 0%, 100% { opacity: .72; transform: scale(.88); } 48% { opacity: 1; transform: scale(1.08); } }
+      @keyframes ring { 0% { opacity: 0; transform: scale(.55); } 18% { opacity: .42; } 70%, 100% { opacity: 0; transform: scale(1.75); } }
+      @media (prefers-reduced-motion: reduce) {
+        .signal-in-left, .signal-in-right, .wave-soft, .orbit, .star, .ring-a, .ring-b { animation: none !important; }
+        .ring-a, .ring-b { opacity: .2; }
+      }
+    </style>
+  </defs>
+
+  <rect x="1" y="1" width="1198" height="258" rx="24" fill="url(#background)" stroke="var(--stroke)"/>
+  <g clip-path="url(#frame)">
+    <ellipse cx="600" cy="102" rx="330" ry="180" fill="url(#halo)"/>
+
+    <path class="wave-soft" d="M-80 105C85 72 225 137 382 103S504 73 566 94" fill="none" stroke="var(--gold-deep)" stroke-width="1.2"/>
+    <path class="wave-soft" d="M1230 105C1065 72 925 137 768 103S696 73 634 94" fill="none" stroke="var(--gold-deep)" stroke-width="1.2"/>
+    <path d="M-80 92C92 130 222 54 390 96S505 119 566 99" fill="none" stroke="var(--gold)" stroke-opacity=".13"/>
+    <path d="M1230 92C1058 130 928 54 760 96S695 119 634 99" fill="none" stroke="var(--gold)" stroke-opacity=".13"/>
+
+    <path class="signal-in-left" d="M70 98C216 98 328 98 550 98" fill="none" stroke="url(#signal-left)" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="4 14"/>
+    <path class="signal-in-right" d="M1130 98C984 98 872 98 650 98" fill="none" stroke="url(#signal-right)" stroke-width="1.8" stroke-linecap="round" stroke-dasharray="4 14"/>
+  </g>
+
+  <circle class="ring-a" cx="600" cy="92" r="31" fill="none" stroke="var(--gold)" stroke-opacity=".38"/>
+  <circle class="ring-b" cx="600" cy="92" r="31" fill="none" stroke="var(--gold)" stroke-opacity=".28"/>
+  <circle cx="600" cy="92" r="29" fill="var(--panel)" stroke="var(--gold-deep)" stroke-opacity=".7"/>
+  <g class="orbit">
+    <circle cx="600" cy="57" r="2" fill="var(--gold)"/>
+    <path d="M600 53A39 39 0 0 1 639 92" fill="none" stroke="var(--gold)" stroke-opacity=".18"/>
+  </g>
+  <path class="star" d="M600 72L604.2 87.8L620 92L604.2 96.2L600 112L595.8 96.2L580 92L595.8 87.8Z" fill="var(--gold)" filter="url(#soft-glow)"/>
+  <circle cx="600" cy="92" r="3" fill="var(--panel)"/>
+
+  <text x="600" y="164" fill="var(--text)" font-size="25" font-weight="650" letter-spacing="-.45" text-anchor="middle">Your voice. Your machine.</text>
+  <text x="600" y="190" fill="var(--muted)" font-size="11.5" text-anchor="middle">Diarix is built locally and developed in the open.</text>
+  <line x1="390" y1="214" x2="510" y2="214" stroke="var(--stroke)"/>
+  <line x1="690" y1="214" x2="810" y2="214" stroke="var(--stroke)"/>
+  <text x="600" y="218" fill="var(--gold)" font-size="10" font-weight="700" letter-spacing="1.7" text-anchor="middle">STAR DIARIX IF IT EARNS A PLACE IN YOUR WORKFLOW</text>
+</svg>
