@@ -56,7 +56,7 @@ CPU and CUDA use the same library, task system, history, model catalog, and cach
 | Drop audio or video, including MP4, onto the default dashboard. FFprobe inspects the source and FFmpeg creates model-ready audio without changing the original. | Use push-to-talk or toggle dictation from any app. Diarix restores focus, pastes the result, keeps the selected model warm while needed, and releases memory after the configured idle period. | Voice generation, profiles, stories, captures, history, local refinement, downloads, cancellation, and GPU controls stay separate but connected. |
 
 <p align="center">
-  <img src=".github/assets/transcription-pipeline.svg" alt="Animated Diarix pipeline from media inspection to live transcript and history" width="100%" />
+  <img src=".github/assets/transcription-pipeline.svg?v=2" alt="Animated Diarix pipeline from media inspection to live transcript and history" width="100%" />
 </p>
 
 Diarix exposes the work behind a transcript instead of hiding it behind an indeterminate spinner. Media inspection, normalization, model loading, transcription, live partials, and persistence are distinct task stages with shared progress and cancellation.
@@ -143,7 +143,7 @@ The Tauri process starts and owns the bundled server silently. The backend varia
 ## Local by design
 
 <p align="center">
-  <img src=".github/assets/local-first.svg" alt="Animated Diarix local-first data flow" width="100%" />
+  <img src=".github/assets/local-first.svg?v=2" alt="Animated Diarix local-first data flow" width="100%" />
 </p>
 
 Core transcription, dictation, voice generation, and refinement run on the local runtime you select. An internet connection is needed to download the app, optional runtimes, and model files, but installed workflows do not depend on a cloud account or hosted inference service.
